@@ -92,8 +92,7 @@ public class LiarGameClientLoginUI extends JFrame {
     public LiarGameClientLoginUI() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setTitle("DrawLier - Liar Game Client");
-        setBounds(100, 100, 400, 550);
-
+        setBounds(100, 100, 400, 700);
         contentPane = new BackgroundPanel("UserStart.jpg");
         contentPane.setBorder(new EmptyBorder(30, 30, 30, 30));
         setContentPane(contentPane);

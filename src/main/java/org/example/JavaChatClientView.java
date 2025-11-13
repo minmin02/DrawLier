@@ -54,7 +54,7 @@ public class JavaChatClientView extends JFrame {
      */
     public JavaChatClientView(String username, String ip_addr, String port_no) {
         // 프레임 타이틀에 사용자 이름 표시
-        setTitle("라이어 게임 - " + username);
+        setTitle("DrawLier - " + username);
         // 창 닫기 버튼 클릭 시 프로그램 종료
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         // 프레임 위치(100, 100)와 크기(1000x600) 설정
@@ -323,6 +323,7 @@ public class JavaChatClientView extends JFrame {
         }
     }
 
+
     /**
      * 그림판 색상 업데이트 메소드
      */
@@ -393,6 +394,54 @@ public class JavaChatClientView extends JFrame {
         if (result == JOptionPane.YES_OPTION) {
             // 그림판 초기화
             drawingPanel.clear();
+            // 서버에 전체 지우기 명령 전송
+            SendDrawCommand("/clear");
+        }
+    }
+
+    /**
+     * 그림 명령을 서버로 전송하는 메소드
+     * @param command 그림 명령 문자열
+     */
+    private void SendDrawCommand(String command) {
+        try {
+            // UTF 문자열 형식으로 서버에 그림 명령 전송
+            dos.writeUTF(command);
+        } catch (IOException e) {
+            AppendText("그림 데이터 전송 실패\n");
+        }
+    }
+
+    /**
+     * 서버로부터 받은 그림 명령을 처리하는 메소드
+     * @param command 그림 명령 문자열
+     */
+    private void ProcessDrawCommand(String command) {
+        // 명령어를 공백으로 분리
+        String[] parts = command.split(" ");
+
+        // 전체 지우기 명령
+        if (parts[0].equals("/clear")) {
+            drawingPanel.clear();
+        }
+        // 그리기 명령: /draw x1 y1 x2 y2 r g b thickness isEraser
+        else if (parts[0].equals("/draw") && parts.length >= 10) {
+            try {
+                int x1 = Integer.parseInt(parts[1]);
+                int y1 = Integer.parseInt(parts[2]);
+                int x2 = Integer.parseInt(parts[3]);
+                int y2 = Integer.parseInt(parts[4]);
+                int r = Integer.parseInt(parts[5]);
+                int g = Integer.parseInt(parts[6]);
+                int b = Integer.parseInt(parts[7]);
+                int thickness = Integer.parseInt(parts[8]);
+                boolean isEraser = Boolean.parseBoolean(parts[9]);
+
+                // 다른 사용자의 그림을 로컬 그림판에 그리기
+                drawingPanel.drawRemoteLine(x1, y1, x2, y2, new Color(r, g, b), thickness, isEraser);
+            } catch (NumberFormatException e) {
+                AppendText("잘못된 그림 데이터\n");
+            }
         }
     }
 
@@ -441,21 +490,19 @@ public class JavaChatClientView extends JFrame {
 
                     // 그래픽스 객체가 초기화되어 있으면
                     if (g2 != null) {
-                        // 지우개 모드인 경우
-                        if (eraserMode) {
-                            // 흰색으로 설정 (지우기)
-                            g2.setPaint(Color.WHITE);
-                            // 지우개 굵기를 선 굵기의 2배로 설정
-                            g2.setStroke(new BasicStroke(strokeThickness * 2));
-                        } else {
-                            // 선택된 그리기 색상으로 설정
-                            g2.setPaint(drawingColor);
-                            // 선 굵기와 스타일 설정 (둥근 끝, 둥근 연결)
-                            g2.setStroke(new BasicStroke(strokeThickness,
-                                    BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                        }
-                        // 이전 위치에서 현재 위치까지 선 그리기
-                        g2.drawLine(oldX, oldY, currentX, currentY);
+                        // 로컬에서 선 그리기
+                        drawLocalLine(oldX, oldY, currentX, currentY);
+
+                        // 서버로 그림 데이터 전송
+                        // 형식: /draw x1 y1 x2 y2 r g b thickness isEraser
+                        Color color = eraserMode ? Color.WHITE : drawingColor;
+                        String drawCommand = String.format("/draw %d %d %d %d %d %d %d %d %b",
+                                oldX, oldY, currentX, currentY,
+                                color.getRed(), color.getGreen(), color.getBlue(),
+                                eraserMode ? strokeThickness * 2 : strokeThickness,
+                                eraserMode);
+                        SendDrawCommand(drawCommand);
+
                         // 화면 다시 그리기
                         repaint();
                         // 현재 위치를 이전 위치로 업데이트
@@ -464,6 +511,48 @@ public class JavaChatClientView extends JFrame {
                     }
                 }
             });
+        }
+
+        /**
+         * 로컬에서 선 그리기 (자신의 그림)
+         */
+        private void drawLocalLine(int x1, int y1, int x2, int y2) {
+            // 지우개 모드인 경우
+            if (eraserMode) {
+                // 흰색으로 설정 (지우기)
+                g2.setPaint(Color.WHITE);
+                // 지우개 굵기를 선 굵기의 2배로 설정
+                g2.setStroke(new BasicStroke(strokeThickness * 2));
+            } else {
+                // 선택된 그리기 색상으로 설정
+                g2.setPaint(drawingColor);
+                // 선 굵기와 스타일 설정 (둥근 끝, 둥근 연결)
+                g2.setStroke(new BasicStroke(strokeThickness,
+                        BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            }
+            // 이전 위치에서 현재 위치까지 선 그리기
+            g2.drawLine(x1, y1, x2, y2);
+        }
+
+        /**
+         * 원격에서 받은 선 그리기 (다른 사용자의 그림)
+         */
+        public void drawRemoteLine(int x1, int y1, int x2, int y2, Color color, int thickness, boolean isEraser) {
+            if (g2 != null) {
+                // 지우개 모드인 경우
+                if (isEraser) {
+                    g2.setPaint(Color.WHITE);
+                    g2.setStroke(new BasicStroke(thickness));
+                } else {
+                    g2.setPaint(color);
+                    g2.setStroke(new BasicStroke(thickness,
+                            BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                }
+                // 선 그리기
+                g2.drawLine(x1, y1, x2, y2);
+                // 화면 다시 그리기
+                repaint();
+            }
         }
 
         /**
@@ -544,8 +633,15 @@ public class JavaChatClientView extends JFrame {
                 try {
                     // 서버로부터 UTF 문자열 읽기
                     String msg = dis.readUTF();
-                    // 받은 메시지를 채팅창에 출력
-                    AppendText(msg);
+
+                    // 그림 명령인 경우 (/draw 또는 /clear로 시작)
+                    if (msg.startsWith("/draw") || msg.startsWith("/clear")) {
+                        // 그림 명령 처리
+                        ProcessDrawCommand(msg);
+                    } else {
+                        // 일반 채팅 메시지를 채팅창에 출력
+                        AppendText(msg);
+                    }
                 } catch (IOException e) {
                     // 연결 종료 메시지 출력
                     AppendText("연결이 종료되었습니다.\n");

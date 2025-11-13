@@ -40,19 +40,26 @@ public class LiarGameClientLoginUI extends JFrame {
             // 플레이스홀더를 기본 텍스트로 설정
             setText(placeholder);
             // 플레이스홀더는 연한 회색으로 표시
-            setForeground(Color.LIGHT_GRAY);
+            setForeground(new Color(150, 150, 150));
             // 포커스 이벤트 리스너 등록
             addFocusListener(this);
             // 컬럼 수 설정
             setColumns(15);
             // 텍스트 필드 크기 설정
-            setPreferredSize(new Dimension(getPreferredSize().width, 36));
+            setPreferredSize(new Dimension(getPreferredSize().width, 42));
             // 폰트 설정 (맑은 고딕, 보통체, 14px)
             setFont(new Font("맑은 고딕", Font.PLAIN, 14));
-            // 텍스트 필드를 투명하게 설정 (배경 이미지가 보이도록)
-            setOpaque(false);
-            // 커서(캐럿) 색상을 흰색으로 설정
-            setCaretColor(Color.WHITE);
+            // 텍스트 필드 배경색 설정 (반투명 흰색)
+            setBackground(new Color(255, 255, 255, 200));
+            // 텍스트 필드를 불투명하게 설정
+            setOpaque(true);
+            // 커서(캐럿) 색상을 검정색으로 설정
+            setCaretColor(Color.BLACK);
+            // 둥근 테두리 설정 (회색, 1px)
+            setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(180, 180, 180), 1, true),
+                    BorderFactory.createEmptyBorder(8, 15, 8, 15)
+            ));
         }
 
         // 텍스트 필드에 포커스가 들어왔을 때 호출
@@ -67,6 +74,11 @@ public class LiarGameClientLoginUI extends JFrame {
                 // 더 이상 비어있지 않음으로 표시
                 isEmpty = false;
             }
+            // 포커스 시 테두리 색상 변경 (파란색)
+            setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(66, 133, 244), 2, true),
+                    BorderFactory.createEmptyBorder(7, 14, 7, 14)
+            ));
         }
 
         // 텍스트 필드에서 포커스가 벗어났을 때 호출
@@ -77,10 +89,15 @@ public class LiarGameClientLoginUI extends JFrame {
                 // 플레이스홀더 텍스트를 다시 표시
                 setText(placeholder);
                 // 연한 회색으로 변경
-                setForeground(Color.LIGHT_GRAY);
+                setForeground(new Color(150, 150, 150));
                 // 비어있음으로 표시
                 isEmpty = true;
             }
+            // 포커스 아웃 시 테두리 색상 원래대로
+            setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(180, 180, 180), 1, true),
+                    BorderFactory.createEmptyBorder(8, 15, 8, 15)
+            ));
         }
 
         // getText() 메소드 오버라이드: 실제 입력값만 반환
@@ -120,14 +137,14 @@ public class LiarGameClientLoginUI extends JFrame {
         // 창 닫기 버튼 클릭 시 프로그램 종료
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         // 프레임 타이틀 설정
-        setTitle("라이어 게임 클라이언트");
-        // 프레임 위치(100, 100)와 크기(400x500) 설정
-        setBounds(100, 100, 400, 500);
+        setTitle("DrawLier - Liar Game Client");
+        // 프레임 위치(100, 100)와 크기(400x550) 설정
+        setBounds(100, 100, 400, 550);
 
         // 배경 이미지(UserStart.jpg)가 있는 커스텀 패널 생성
         contentPane = new BackgroundPanel("UserStart.jpg");
-        // 패널 여백 설정 (상하좌우 20px)
-        contentPane.setBorder(new EmptyBorder(20, 20, 20, 20));
+        // 패널 여백 설정 (상하좌우 30px)
+        contentPane.setBorder(new EmptyBorder(30, 30, 30, 30));
         // 이 패널을 프레임의 컨텐트 패널로 설정
         setContentPane(contentPane);
         // BorderLayout 설정 (컴포넌트 간 간격 20px)
@@ -138,16 +155,42 @@ public class LiarGameClientLoginUI extends JFrame {
         JPanel titlePanel = new JPanel();
         // 패널을 투명하게 설정 (배경 이미지가 보이도록)
         titlePanel.setOpaque(false);
-        // FlowLayout으로 설정 (가운데 정렬)
-        titlePanel.setLayout(new FlowLayout(FlowLayout.CENTER));
-        // "라이어 게임 입장" 라벨 생성
-        JLabel lblTitle = new JLabel("라이어 게임 입장");
-        // 폰트 설정 (맑은 고딕, 굵게, 28px)
-        lblTitle.setFont(new Font("맑은 고딕", Font.BOLD, 28));
-        // 글자색을 흰색으로 설정
-        lblTitle.setForeground(Color.WHITE);
+        // BoxLayout으로 설정 (수직 배치)
+        titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
+
+        // 메인 타이틀 이미지 라벨 생성
+        JLabel lblMainTitle = new JLabel();
+        try {
+            // 이미지 파일 로드 (프로젝트 루트 또는 resources 폴더에서)
+            ImageIcon titleIcon = new ImageIcon(getClass().getResource("/DrawLierLogo.png"));
+            // 이미지 크기 조정 (원하는 크기로 설정 가능)
+            Image titleImage = titleIcon.getImage().getScaledInstance(250, 80, Image.SCALE_SMOOTH);
+            lblMainTitle.setIcon(new ImageIcon(titleImage));
+        } catch (Exception e) {
+            // 이미지 로드 실패 시 텍스트로 대체
+            lblMainTitle.setText("DrawLier");
+            lblMainTitle.setFont(new Font("맑은 고딕", Font.BOLD, 38));
+            lblMainTitle.setForeground(Color.WHITE);
+        }
+        // 가운데 정렬
+        lblMainTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
         // 제목 라벨을 패널에 추가
-        titlePanel.add(lblTitle);
+        titlePanel.add(lblMainTitle);
+
+        // 간격 추가 (5px)
+        titlePanel.add(Box.createVerticalStrut(5));
+
+        // 서브 타이틀 "Enter the Game" 라벨 생성
+        JLabel lblSubTitle = new JLabel("Enter the Game");
+        // 폰트 설정 (맑은 고딕, 보통체, 16px)
+        lblSubTitle.setFont(new Font("맑은 고딕", Font.PLAIN, 16));
+        // 글자색을 밝은 회색으로 설정
+        lblSubTitle.setForeground(new Color(230, 230, 230));
+        // 가운데 정렬
+        lblSubTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // 서브 타이틀 라벨을 패널에 추가
+        titlePanel.add(lblSubTitle);
+
         // 제목 패널을 상단(NORTH)에 배치
         contentPane.add(titlePanel, BorderLayout.NORTH);
 
@@ -156,22 +199,22 @@ public class LiarGameClientLoginUI extends JFrame {
         JPanel inputPanel = new JPanel();
         // 패널을 투명하게 설정
         inputPanel.setOpaque(false);
-        // GridLayout 설정 (6행 1열, 세로 간격 15px)
-        inputPanel.setLayout(new GridLayout(6, 1, 0, 15));
-        // 패널 여백 설정 (상하 20px)
-        inputPanel.setBorder(new EmptyBorder(20, 0, 20, 0));
+        // GridLayout 설정 (6행 1열, 세로 간격 12px)
+        inputPanel.setLayout(new GridLayout(6, 1, 0, 12));
+        // 패널 여백 설정 (상하 20px, 좌우 10px)
+        inputPanel.setBorder(new EmptyBorder(20, 10, 20, 10));
 
         // ----- 서버 IP 입력 -----
-        // "서버 IP" 라벨 생성
-        JLabel lblIp = new JLabel("서버 IP");
-        // 폰트 설정 (맑은 고딕, 굵게, 14px)
-        lblIp.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+        // "Server IP" 라벨 생성
+        JLabel lblIp = new JLabel("Server IP");
+        // 폰트 설정 (맑은 고딕, 굵게, 13px)
+        lblIp.setFont(new Font("맑은 고딕", Font.BOLD, 13));
         // 글자색을 흰색으로 설정
         lblIp.setForeground(Color.WHITE);
         // 라벨을 패널에 추가
         inputPanel.add(lblIp);
         // 플레이스홀더가 있는 텍스트 필드 생성
-        txtIpAddress = new PlaceholderTextField("서버 IP를 입력하세요");
+        txtIpAddress = new PlaceholderTextField("Enter server IP address");
         // 기본값으로 로컬호스트(127.0.0.1) 설정
         txtIpAddress.setText("127.0.0.1");
         // 기본값 텍스트는 검정색으로 표시
@@ -182,30 +225,30 @@ public class LiarGameClientLoginUI extends JFrame {
         inputPanel.add(txtIpAddress);
 
         // ----- 닉네임 입력 -----
-        // "닉네임" 라벨 생성
-        JLabel lblNickname = new JLabel("닉네임");
+        // "Nickname" 라벨 생성
+        JLabel lblNickname = new JLabel("Nickname");
         // 폰트 설정
-        lblNickname.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+        lblNickname.setFont(new Font("맑은 고딕", Font.BOLD, 13));
         // 글자색을 흰색으로 설정
         lblNickname.setForeground(Color.WHITE);
         // 라벨을 패널에 추가
         inputPanel.add(lblNickname);
         // 플레이스홀더가 있는 텍스트 필드 생성
-        txtNickname = new PlaceholderTextField("닉네임을 입력하세요");
+        txtNickname = new PlaceholderTextField("Enter your nickname");
         // 텍스트 필드를 패널에 추가
         inputPanel.add(txtNickname);
 
         // ----- 포트 입력 -----
-        // "포트" 라벨 생성
-        JLabel lblPort = new JLabel("포트");
+        // "Port" 라벨 생성
+        JLabel lblPort = new JLabel("Port");
         // 폰트 설정
-        lblPort.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+        lblPort.setFont(new Font("맑은 고딕", Font.BOLD, 13));
         // 글자색을 흰색으로 설정
         lblPort.setForeground(Color.WHITE);
         // 라벨을 패널에 추가
         inputPanel.add(lblPort);
         // 플레이스홀더가 있는 텍스트 필드 생성
-        txtPort = new PlaceholderTextField("포트를 입력하세요");
+        txtPort = new PlaceholderTextField("Enter port number");
         // 기본값으로 30000 설정
         txtPort.setText("30000");
         // 기본값 텍스트는 검정색으로 표시
@@ -225,26 +268,38 @@ public class LiarGameClientLoginUI extends JFrame {
         buttonPanel.setOpaque(false);
         // BoxLayout 설정 (수직 배치)
         buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
-        // 패널 여백 설정 (상단 10px)
-        buttonPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
+        // 패널 여백 설정 (상단 10px, 좌우 10px)
+        buttonPanel.setBorder(new EmptyBorder(10, 10, 0, 10));
 
         // ----- 입장하기 버튼 -----
         // "입장하기" 버튼 생성
         btnEnterGame = new JButton("입장하기");
         // 폰트 설정 (맑은 고딕, 굵게, 16px)
         btnEnterGame.setFont(new Font("맑은 고딕", Font.BOLD, 16));
-        // 버튼 배경색 설정 (어두운 청회색)
-        btnEnterGame.setBackground(new Color(47, 72, 113));
-        // 버튼 글자색을 빨간색으로 설정
-        btnEnterGame.setForeground(Color.RED);
+        // 버튼 배경색 설정 (선명한 빨간색)
+        btnEnterGame.setBackground(new Color(220, 53, 69));
+        // 버튼 글자색을 흰색으로 설정
+        btnEnterGame.setForeground(Color.WHITE);
         // 포커스 테두리 제거
         btnEnterGame.setFocusPainted(false);
-        // 버튼 여백 설정 (상하 10px)
-        btnEnterGame.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
-        // 버튼 최대 크기 설정 (가로 무제한, 세로 45px)
-        btnEnterGame.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45));
+        // 둥근 테두리 설정
+        btnEnterGame.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 43, 59), 2, true),
+                BorderFactory.createEmptyBorder(12, 0, 12, 0)
+        ));
+        // 버튼 최대 크기 설정 (가로 무제한, 세로 48px)
+        btnEnterGame.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
         // 버튼을 가운데 정렬
         btnEnterGame.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // 마우스 오버 효과 추가
+        btnEnterGame.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btnEnterGame.setBackground(new Color(200, 43, 59));
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btnEnterGame.setBackground(new Color(220, 53, 69));
+            }
+        });
         // 버튼을 패널에 추가
         buttonPanel.add(btnEnterGame);
         // 버튼 사이에 15px 간격 추가
@@ -252,11 +307,11 @@ public class LiarGameClientLoginUI extends JFrame {
 
         // ----- 서버 관리자로 접속하기 버튼 -----
         // "서버 관리자로 접속하기" 버튼 생성
-        btnConnectAsAdmin = new JButton("서버 관리자로 접속하기");
+        btnConnectAsAdmin = new JButton("Connect as Server Admin");
         // 폰트 설정 (맑은 고딕, 보통체, 12px)
         btnConnectAsAdmin.setFont(new Font("맑은 고딕", Font.PLAIN, 12));
-        // 버튼 글자색을 흰색으로 설정
-        btnConnectAsAdmin.setForeground(Color.WHITE);
+        // 버튼 글자색을 밝은 흰색으로 설정
+        btnConnectAsAdmin.setForeground(new Color(230, 230, 230));
         // 포커스 테두리 제거
         btnConnectAsAdmin.setFocusPainted(false);
         // 버튼 테두리 제거
@@ -265,6 +320,15 @@ public class LiarGameClientLoginUI extends JFrame {
         btnConnectAsAdmin.setContentAreaFilled(false);
         // 버튼을 가운데 정렬
         btnConnectAsAdmin.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // 마우스 오버 효과 추가
+        btnConnectAsAdmin.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btnConnectAsAdmin.setForeground(Color.WHITE);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btnConnectAsAdmin.setForeground(new Color(230, 230, 230));
+            }
+        });
         // 버튼을 패널에 추가
         buttonPanel.add(btnConnectAsAdmin);
 

@@ -74,7 +74,7 @@ public class DrawServer extends JFrame {
         contentPane.setLayout(null);
 
         //타이틀
-        JLabel titleLable = new JLabel("라이어 게임 서버");
+        JLabel titleLable = new JLabel("DrawLier 서버");
         Font titleFont = titleLable.getFont();
         Font newFont = new Font(titleFont.getName(), Font.BOLD, 20);
         titleLable.setFont(newFont);
@@ -287,6 +287,17 @@ public class DrawServer extends JFrame {
             }
         }
 
+        // 특정 클라이언트를 제외한 나머지 클라이언트에게 메시지 전달 (그림 데이터 브로드캐스트용)
+        public void WriteAllExceptMe(String str) {
+            for (int i = 0; i < user_vc.size(); i++) {
+                UserService user = user_vc.get(i);
+                // 자기 자신이 아닌 경우에만 전송
+                if (user != this) {
+                    user.WriteOne(str);
+                }
+            }
+        }
+
 
         public void run() {
             // dis.readUTF()에서 대기하다가 메시지가 들어오면 -> Write All로 전체 접속한 사용자한테 메시지 전송(단톡방), 이걸 클라이언트별로 무한히 실행
@@ -297,8 +308,17 @@ public class DrawServer extends JFrame {
                 try {
                     String msg = dis.readUTF();
                     msg = msg.trim();   //msg를 가져와 trim 메소드를 사용하여 앞뒤의 공백을 제거
-                    //AppendText(msg); // server 화면에 출력
-                    WriteAll(msg + "\n"); // Write All
+                    
+                    // 그림 데이터 처리: /draw 또는 /clear 명령어인 경우
+                    if (msg.startsWith("/draw") || msg.startsWith("/clear")) {
+                        // 그림 데이터는 본인을 제외한 다른 모든 클라이언트에게 전송
+                        WriteAllExceptMe(msg);
+                    } 
+                    // 일반 채팅 메시지 처리
+                    else {
+                        //AppendText(msg); // server 화면에 출력
+                        WriteAll(msg + "\n"); // 모든 클라이언트에게 전송
+                    }
                 } catch (IOException e) {
                     //AppendText("dis.readUTF() error");
                     try {

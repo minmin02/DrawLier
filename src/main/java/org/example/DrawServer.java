@@ -170,6 +170,21 @@ public class DrawServer extends JFrame {
         JLabel lblGameStart = new JLabel("4명이 모두 접속해야 게임을 시작할 수 있습니다.");
         lblGameStart.setBounds(110, 510, 464, 26);
         contentPane.add(lblGameStart);
+
+        if(UserVec.size() < 4) btnGameStart.setEnabled(false); // 게임시작을 누르지 못하게 막음
+        else btnGameStart.setEnabled(true);
+
+        btnGameStart.addActionListener(new ActionListener() {
+           public void actionPerformed(ActionEvent e) {
+//               if(UserVec.size() < 4){
+//                   btnServerStart.setText("방 생성 완료!");
+//                   return;
+//               }
+               for(UserService user : UserVec){
+                   user.WriteOne("/gameStart");
+               }
+           }
+        });
     }
 
 
@@ -179,11 +194,9 @@ public class DrawServer extends JFrame {
         public void run() {
             while (true) { // 사용자 접속을 계속해서 받기 위해 while문
                 try {
-                    //AppendText("Waiting clients ...");
                     client_socket = socket.accept(); // accept가 일어나기 전까지는 무한 대기중
 
                     if(UserVec.size() >= MAX_CLIENTS){
-                        //AppendText("최대 인원");
                         try(OutputStream os = client_socket.getOutputStream();
                             DataOutputStream dos = new DataOutputStream(os);
                         ){
@@ -192,7 +205,6 @@ public class DrawServer extends JFrame {
                         client_socket.close();
                         continue;
                     }
-                    //AppendText("새로운 참가자 from " + client_socket);
                     // User 당 하나씩 Thread 생성
                     UserService new_user = new UserService(client_socket);
                     UserVec.add(new_user); // 새로운 참가자 배열에 추가
@@ -246,21 +258,16 @@ public class DrawServer extends JFrame {
                 String line1 = dis.readUTF();      // 제일 처음 연결되면 클라이언트의 SendMessage("/login " + UserName);에 의해 "/login UserName" 문자열이 들어옴
                 String[] msg = line1.split(" ");   //line1이라는 문자열을 공백(" ")을 기준으로 분할
                 UserName = msg[1].trim();          //분할된 문자열 배열 msg의 두 번째 요소(인덱스 1)를 가져와 trim 메소드를 사용하여 앞뒤의 공백을 제거
-                //AppendText("새로운 참가자 " + UserName + " 입장.");
-                WriteOne("Welcome to Java chat server\n");
                 WriteOne(UserName + "님 환영합니다.\n"); // 연결된 사용자에게 정상접속을 알림
             } catch (Exception e) {
                 //AppendText("userService error");
             }
         }
-
-
         // 클라이언트로 메시지 전송
         public void WriteOne(String msg) {
             try {
                 dos.writeUTF(msg);
             } catch (IOException e) {
-                //AppendText("dos.write() error");
                 try {
                     dos.close();
                     dis.close();
@@ -272,8 +279,6 @@ public class DrawServer extends JFrame {
                 //AppendText("사용자 퇴장. 현재 참가자 수 " + UserVec.size());
             }
         }
-
-
         //모든 다중 클라이언트에게 순차적으로 채팅 메시지 전달
         public void WriteAll(String str) {
             for (int i = 0; i < user_vc.size(); i++) {

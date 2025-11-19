@@ -5,12 +5,13 @@ import java.util.List;
 
 /**
  * 게임 방 정보를 담는 클래스
+ * 수정사항: addPlayer 메서드에서 인원수 체크 로직을 players.size() 기준으로 변경하여 동기화 문제 해결
  */
 public class GameRoom {
     private String roomId;           // 방 고유 ID
     private String roomName;         // 방 이름
     private String hostName;         // 방장 이름
-    private int currentPlayers;      // 현재 인원
+    private int currentPlayers;      // 현재 인원 (서버 정보용)
     private int maxPlayers;          // 최대 인원 (기본 4명)
     private String category;         // 카테고리
     private int timeLimit;           // 제한 시간 (초)
@@ -36,19 +37,18 @@ public class GameRoom {
         this.players.add(hostName);
     }
 
-    // 플레이어 추가
-// GameRoom.java 내부의 addPlayer 메서드 수정
-
-    // 플레이어 추가
+    // [핵심 수정] 플레이어 추가 로직 변경
     public boolean addPlayer(String playerName) {
-        // [수정] 이미 있는 플레이어라면 추가하지 않고 true 반환 (또는 무시)
+        // 이미 있는 플레이어라면 성공으로 처리
         if (players.contains(playerName)) {
             return true;
         }
 
-        if (currentPlayers < maxPlayers && status == RoomStatus.WAITING) {
+        // [수정] currentPlayers(숫자) 대신 players.size()(실제 리스트)를 기준으로 판단
+        // 이렇게 해야 서버에서 숫자만 4로 오고 명단이 비어있을 때도 정상적으로 추가됨
+        if (players.size() < maxPlayers) {
             players.add(playerName);
-            currentPlayers++;
+            currentPlayers = players.size(); // 숫자도 실제 크기에 맞춰 갱신
             return true;
         }
         return false;
@@ -57,7 +57,8 @@ public class GameRoom {
     // 플레이어 제거
     public boolean removePlayer(String playerName) {
         if (players.remove(playerName)) {
-            currentPlayers--;
+            currentPlayers = players.size(); // 리스트 크기에 맞춰 갱신
+
             // 방장이 나가면 다음 사람을 방장으로
             if (playerName.equals(hostName) && !players.isEmpty()) {
                 hostName = players.get(0);
@@ -69,19 +70,19 @@ public class GameRoom {
 
     // 방이 가득 찼는지 확인
     public boolean isFull() {
-        return currentPlayers >= maxPlayers;
+        return players.size() >= maxPlayers;
     }
 
     // 게임 시작 가능한지 확인
     public boolean canStartGame() {
-        return currentPlayers == maxPlayers && status == RoomStatus.WAITING;
+        return players.size() == maxPlayers && status == RoomStatus.WAITING;
     }
 
     // Getters and Setters
     public String getRoomId() { return roomId; }
     public String getRoomName() { return roomName; }
     public String getHostName() { return hostName; }
-    public int getCurrentPlayers() { return currentPlayers; }
+    public int getCurrentPlayers() { return currentPlayers; } // 단순히 표시용으로 사용
     public int getMaxPlayers() { return maxPlayers; }
     public String getCategory() { return category; }
     public int getTimeLimit() { return timeLimit; }
@@ -117,7 +118,7 @@ public class GameRoom {
         if (parts.length < 9) return null;
 
         GameRoom room = new GameRoom(parts[0], parts[1], parts[2], parts[5], Integer.parseInt(parts[6]));
-        room.currentPlayers = Integer.parseInt(parts[3]);
+        room.currentPlayers = Integer.parseInt(parts[3]); // 서버에서 온 숫자 적용
         room.status = RoomStatus.valueOf(parts[7]);
 
         // 플레이어 목록 복원
@@ -128,6 +129,9 @@ public class GameRoom {
                 room.players.add(name);
             }
         }
+
+        // [안전장치] 만약 복원된 리스트 크기가 currentPlayers보다 작다면 리스트 크기를 우선하지 않더라도
+        // addPlayer 메서드에서 처리가 가능하도록 위에서 수정함.
 
         return room;
     }

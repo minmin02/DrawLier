@@ -10,7 +10,7 @@ import java.awt.*;
 
 /**
  * DrawServer - 소켓 중계 전용 서버
- * 수정사항: 방 입장 시 기존 멤버 목록 동기화 로직 추가
+ * 수정사항: 방 인원수 실시간 갱신 로직 추가 (2번 문제 해결)
  */
 public class DrawServer extends JFrame {
 
@@ -20,11 +20,13 @@ public class DrawServer extends JFrame {
     private JLabel lblConnectedClients;
     private JTextArea textArea;
     private ServerSocket socket;
-    // Thread-safe한 리스트 관리를 위해 Vector 사용
     private Vector<UserService> UserVec = new Vector<>();
 
     // 방 정보를 저장하는 맵 (방ID -> 방정보 문자열)
     private Map<String, String> rooms = new HashMap<>();
+
+    // 방장 정보를 저장하는 맵 (방ID -> 방장이름)
+    private Map<String, String> roomOwners = new HashMap<>();
 
     public static void main(String[] args) {
         EventQueue.invokeLater(() -> {
@@ -124,7 +126,31 @@ public class DrawServer extends JFrame {
         });
     }
 
-    // 클라이언트 접속 처리 스레드
+    // [핵심 추가] 방 인원수 업데이트 메서드
+    private synchronized void updateRoomCount(String roomId, int change) {
+        String roomInfo = rooms.get(roomId);
+        if (roomInfo != null) {
+            String[] parts = roomInfo.split("\\|");
+            // parts[3]이 현재 인원수라고 가정 (GameRoom.toProtocolString 순서 참고)
+            try {
+                int currentCount = Integer.parseInt(parts[3]);
+                int newCount = currentCount + change;
+
+                // 인원수 갱신
+                parts[3] = String.valueOf(newCount);
+
+                // 다시 문자열로 합치기
+                String newRoomInfo = String.join("|", parts);
+                rooms.put(roomId, newRoomInfo);
+
+                // 디버깅용 로그
+                // AppendText("[인원변경] " + roomId + ": " + currentCount + " -> " + newCount);
+            } catch (Exception e) {
+                AppendText("방 인원 업데이트 오류: " + e.getMessage());
+            }
+        }
+    }
+
     class AcceptServer extends Thread {
         public void run() {
             AppendText("클라이언트 접속 대기 중...");
@@ -145,7 +171,6 @@ public class DrawServer extends JFrame {
         }
     }
 
-    // 클라이언트별 통신 스레드
     class UserService extends Thread {
         private Socket clientSocket;
         private DataInputStream dis;
@@ -179,15 +204,6 @@ public class DrawServer extends JFrame {
             }
         }
 
-        public void WriteAllExceptMe(String str) {
-            for (UserService user : UserVec) {
-                if (user != this) {
-                    user.WriteOne(str);
-                }
-            }
-        }
-
-        // 같은 방에 있는 사람들에게만 메시지 전송
         public void WriteToRoom(String roomId, String msg) {
             for (UserService user : UserVec) {
                 if (roomId.equals(user.currentRoomId)) {
@@ -196,7 +212,6 @@ public class DrawServer extends JFrame {
             }
         }
 
-        // 같은 방의 다른 사람들에게 메시지 전송
         public void WriteToRoomExceptMe(String roomId, String msg) {
             for (UserService user : UserVec) {
                 if (roomId.equals(user.currentRoomId) && user != this) {
@@ -208,7 +223,9 @@ public class DrawServer extends JFrame {
         private void closeConnection() {
             try {
                 if (currentRoomId != null) {
-                    // 방에서 퇴장 알림
+                    // [수정] 나갈 때 인원수 감소
+                    updateRoomCount(currentRoomId, -1);
+
                     WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName);
                 }
 
@@ -225,7 +242,6 @@ public class DrawServer extends JFrame {
 
         public void run() {
             try {
-                // 첫 메시지로 로그인 처리
                 String firstMsg = dis.readUTF();
                 if (firstMsg.startsWith("/login ")) {
                     userName = firstMsg.substring(7).trim();
@@ -233,23 +249,21 @@ public class DrawServer extends JFrame {
                     WriteOne("/loginOK");
                 }
 
-                // 메시지 처리 루프
                 while (true) {
                     String msg = dis.readUTF().trim();
 
-                    // 방 생성 요청
                     if (msg.startsWith("/createRoom ")) {
                         String roomData = msg.substring(12);
                         String[] parts = roomData.split("\\|");
                         String roomId = parts[0];
 
                         rooms.put(roomId, roomData);
+                        roomOwners.put(roomId, userName);
                         currentRoomId = roomId;
 
-                        AppendText("[방 생성] " + parts[1] + " (by " + userName + ")");
+                        AppendText("[방 생성] " + parts[1] + " (Host: " + userName + ")");
                         WriteOne("/roomCreated " + roomId);
                     }
-                    // 방 목록 요청
                     else if (msg.equals("/getRoomList")) {
                         StringBuilder roomList = new StringBuilder("/roomList ");
                         for (String roomData : rooms.values()) {
@@ -257,51 +271,56 @@ public class DrawServer extends JFrame {
                         }
                         WriteOne(roomList.toString());
                     }
-                    // [수정됨] 방 참가 요청
                     else if (msg.startsWith("/joinRoom ")) {
                         String roomId = msg.substring(10);
                         currentRoomId = roomId;
 
+                        // [수정] 입장 시 인원수 증가
+                        updateRoomCount(roomId, 1);
+
                         AppendText("[방 참가] " + userName + " -> " + roomId);
 
-                        // 1. 나에게: 방 참가 성공 알림
                         WriteOne("/joinedRoom " + roomId);
-
-                        // 2. 기존 멤버들에게: "새로운 사람(나) 들어옴" 알림
                         WriteToRoomExceptMe(roomId, "/playerJoined " + userName);
 
-                        // 3. [추가된 로직] 나에게: "기존에 누가 있는지" 알려줌
-                        // 전체 유저 목록을 순회하며 같은 방 유저 찾기
                         for (UserService user : UserVec) {
-                            // 나 자신은 제외하고, 방 ID가 같은 유저를 찾음
                             if (user != this && roomId.equals(user.currentRoomId)) {
-                                // 나에게 기존 유저의 이름을 전송 -> 내 화면 UI에 추가됨
                                 WriteOne("/playerJoined " + user.userName);
                             }
                         }
                     }
-                    // 방 나가기
                     else if (msg.startsWith("/leaveRoom")) {
                         if (currentRoomId != null) {
+                            // [수정] 퇴장 시 인원수 감소
+                            updateRoomCount(currentRoomId, -1);
+
                             AppendText("[방 퇴장] " + userName + " <- " + currentRoomId);
                             WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName);
                             currentRoomId = null;
                         }
                     }
-                    // 게임 시작 (방장이 전송)
                     else if (msg.startsWith("/gameStart")) {
-                        AppendText("[게임 시작] " + currentRoomId);
-                        if (currentRoomId != null) {
+                        String owner = roomOwners.get(currentRoomId);
+                        if (owner != null && owner.equals(userName)) {
+                            AppendText("[게임 시작] 방: " + currentRoomId + " (by " + userName + ")");
+                            // [추가] 상태를 PLAYING으로 변경해줘야 리스트에서도 '게임중'으로 뜸
+                            String roomInfo = rooms.get(currentRoomId);
+                            if(roomInfo != null) {
+                                String[] parts = roomInfo.split("\\|");
+                                parts[7] = "PLAYING"; // GameRoom Enum 순서에 따라 상태 변경
+                                rooms.put(currentRoomId, String.join("|", parts));
+                            }
+
                             WriteToRoom(currentRoomId, "/gameStart");
+                        } else {
+                            AppendText("[권한 없음] " + userName + "이(가) 게임 시작 시도함");
                         }
                     }
-                    // 그리기 데이터
                     else if (msg.startsWith("/draw") || msg.startsWith("/clear")) {
                         if (currentRoomId != null) {
                             WriteToRoomExceptMe(currentRoomId, msg);
                         }
                     }
-                    // 일반 채팅
                     else {
                         if (currentRoomId != null) {
                             WriteToRoom(currentRoomId, msg);

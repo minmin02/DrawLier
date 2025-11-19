@@ -9,26 +9,28 @@ import java.net.Socket;
 import java.util.*;
 
 /**
- * 방 목록을 보여주고 방 생성/참가 기능을 제공하는 UI
+ * 방 목록 UI
+ * 수정사항: 버튼 클릭 이벤트 리스너 복구 및 디자인 유지
  */
 public class RoomListUI extends JFrame {
 
-    // ... (기존 필드 변수들 동일) ...
     private JTable roomTable;
     private DefaultTableModel tableModel;
     private JButton btnCreateRoom;
     private JButton btnJoinRoom;
     private JButton btnRefresh;
+
     private String userName;
     private String serverIp;
     private String serverPort;
+
     private Map<String, GameRoom> roomMap;
+    private GameRoom pendingRoom;
 
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
 
-    // 스레드 제어용 플래그 추가
     private boolean isRunning = true;
 
     public RoomListUI(String userName, String serverIp, String serverPort) {
@@ -41,8 +43,6 @@ public class RoomListUI extends JFrame {
         initializeUI();
         requestRoomList();
     }
-
-    // ... (중간 코드 생략, connectToServer, initializeUI, createRoom 등 기존과 동일) ...
 
     private void connectToServer() {
         try {
@@ -68,36 +68,50 @@ public class RoomListUI extends JFrame {
         }
     }
 
-    // ... (initializeUI, requestRoomList, openCreateRoomDialog, createRoom, joinSelectedRoom 메서드는 기존 그대로 유지) ...
-
     private void initializeUI() {
-        // 기존 코드 유지
         setTitle("DrawLier - 방 목록");
-        setSize(900, 600);
+        setSize(950, 650);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
-        JPanel contentPane = new JPanel();
-        contentPane.setBorder(new EmptyBorder(20, 20, 20, 20));
-        contentPane.setLayout(new BorderLayout(10, 10));
-        contentPane.setBackground(Color.WHITE);
+        // 1. 배경 패널 설정
+        JPanel contentPane = new JPanel() {
+            Image bgImage = new ImageIcon(getClass().getResource("/pino.jpg")).getImage();
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+            }
+        };
+
+        // 전체 여백
+        contentPane.setBorder(new EmptyBorder(80, 50, 10, 50));
+        contentPane.setLayout(new BorderLayout(20, 20));
         setContentPane(contentPane);
 
+        // 2. 상단 패널 (제목)
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
 
         JLabel titleLabel = new JLabel("게임 방 목록");
-        titleLabel.setFont(new Font("맑은 고딕", Font.BOLD, 24));
+        titleLabel.setFont(new Font("맑은 고딕", Font.BOLD, 30));
+        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setText("<html><span style='text-shadow: 2px 2px 4px #000000;'>게임 방 목록</span></html>");
+        titleLabel.setBorder(new EmptyBorder(0, 30, 0, 0));
         topPanel.add(titleLabel, BorderLayout.WEST);
 
         JLabel userInfoLabel = new JLabel("접속자: " + userName);
-        userInfoLabel.setFont(new Font("맑은 고딕", Font.PLAIN, 14));
-        userInfoLabel.setForeground(new Color(100, 100, 100));
+        userInfoLabel.setFont(new Font("맑은 고딕", Font.BOLD, 15));
+        userInfoLabel.setForeground(Color.WHITE);
+        userInfoLabel.setText("<html><span style='text-shadow: 1px 1px 2px #000000;'>접속자: " + userName + "</span></html>");
+        userInfoLabel.setBorder(new EmptyBorder(0, 0, 0, 300));
         topPanel.add(userInfoLabel, BorderLayout.EAST);
 
         contentPane.add(topPanel, BorderLayout.NORTH);
 
-        String[] columnNames = {"방 이름", "방장", "인원", "카테고리", "제한시간", "상태"};
+        // 3. 중앙 테이블 영역
+        String[] columnNames = {"방 이름", "방장", "인원", "카테고리", "시간", "상태"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -107,36 +121,40 @@ public class RoomListUI extends JFrame {
         roomTable.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
         roomTable.setRowHeight(35);
         roomTable.getTableHeader().setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        roomTable.getTableHeader().setBackground(new Color(66, 133, 244));
-        roomTable.getTableHeader().setForeground(Color.WHITE);
+        roomTable.getTableHeader().setBackground(new Color(0, 0, 0, 0));
+        roomTable.getTableHeader().setOpaque(false);
         roomTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
         JScrollPane scrollPane = new JScrollPane(roomTable);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
-        contentPane.add(scrollPane, BorderLayout.CENTER);
+        scrollPane.getViewport().setBackground(new Color(255, 255, 255, 180));
+        scrollPane.setOpaque(false);
+        scrollPane.setBorder(BorderFactory.createLineBorder(Color.WHITE, 2));
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        JPanel tableWrapper = new JPanel(new BorderLayout());
+        tableWrapper.setOpaque(false);
+        tableWrapper.add(scrollPane, BorderLayout.CENTER);
+        tableWrapper.setBorder(new EmptyBorder(0, 40, 0, 300));
+
+        contentPane.add(tableWrapper, BorderLayout.CENTER);
+
+        // 4. 하단 버튼 패널
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
         buttonPanel.setOpaque(false);
+        buttonPanel.setBorder(new EmptyBorder(70, 0, 10, 0));
 
         btnRefresh = new JButton("새로고침");
-        btnRefresh.setFont(new Font("맑은 고딕", Font.PLAIN, 14));
-        btnRefresh.setPreferredSize(new Dimension(120, 40));
+        styleButton(btnRefresh, new Color(255, 255, 255), Color.BLACK);
+        // [복구됨] 새로고침 버튼 기능
         btnRefresh.addActionListener(e -> requestRoomList());
 
         btnJoinRoom = new JButton("방 참가");
-        btnJoinRoom.setFont(new Font("맑은 고딕", Font.BOLD, 14));
-        btnJoinRoom.setPreferredSize(new Dimension(120, 40));
-        btnJoinRoom.setBackground(new Color(66, 133, 244));
-        btnJoinRoom.setForeground(Color.WHITE);
-        btnJoinRoom.setFocusPainted(false);
+        styleButton(btnJoinRoom, new Color(66, 133, 244), Color.WHITE);
+        // [복구됨] 방 참가 버튼 기능
         btnJoinRoom.addActionListener(e -> joinSelectedRoom());
 
         btnCreateRoom = new JButton("방 만들기");
-        btnCreateRoom.setFont(new Font("맑은 고딕", Font.BOLD, 14));
-        btnCreateRoom.setPreferredSize(new Dimension(120, 40));
-        btnCreateRoom.setBackground(new Color(220, 53, 69));
-        btnCreateRoom.setForeground(Color.WHITE);
-        btnCreateRoom.setFocusPainted(false);
+        styleButton(btnCreateRoom, new Color(220, 53, 69), Color.WHITE);
+        // [복구됨] 방 만들기 버튼 기능
         btnCreateRoom.addActionListener(e -> openCreateRoomDialog());
 
         buttonPanel.add(btnRefresh);
@@ -157,6 +175,15 @@ public class RoomListUI extends JFrame {
                 }
             }
         });
+    }
+
+    private void styleButton(JButton btn, Color bg, Color fg) {
+        btn.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+        btn.setPreferredSize(new Dimension(130, 45));
+        btn.setBackground(bg);
+        btn.setForeground(fg);
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createLineBorder(new Color(0,0,0,50), 1));
     }
 
     private void requestRoomList() {
@@ -227,6 +254,7 @@ public class RoomListUI extends JFrame {
         try {
             String roomId = UUID.randomUUID().toString().substring(0, 8);
             GameRoom newRoom = new GameRoom(roomId, roomName, userName, category, timeLimit);
+            this.pendingRoom = newRoom;
             String roomData = newRoom.toProtocolString();
             dos.writeUTF("/createRoom " + roomData);
         } catch (Exception ex) {
@@ -255,12 +283,10 @@ public class RoomListUI extends JFrame {
             JOptionPane.showMessageDialog(this, "방을 찾을 수 없습니다.", "오류", JOptionPane.ERROR_MESSAGE);
             return;
         }
-
         if (selectedRoom.isFull()) {
             JOptionPane.showMessageDialog(this, "방이 가득 찼습니다.", "알림", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         if (selectedRoom.getStatus() != GameRoom.RoomStatus.WAITING) {
             JOptionPane.showMessageDialog(this, "이미 게임이 시작된 방입니다.", "알림", JOptionPane.WARNING_MESSAGE);
             return;
@@ -275,15 +301,10 @@ public class RoomListUI extends JFrame {
 
     private void openGameView(GameRoom room, boolean isHost) {
         try {
-            // 1. 현재 스레드 루프 종료를 위해 플래그 설정 (안전장치)
             isRunning = false;
-
-            // 2. 게임 뷰 생성 (게임 뷰 내부에서 새로운 ListenNetwork가 시작됨)
             JavaChatClientView gameView = new JavaChatClientView(
                     userName, socket, dis, dos, room, isHost);
             gameView.setVisible(true);
-
-            // 3. 현재 창 닫기
             this.dispose();
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "게임 화면 열기 실패: " + ex.getMessage(),
@@ -292,7 +313,6 @@ public class RoomListUI extends JFrame {
         }
     }
 
-    // ... (addRoomToTable 메서드 기존 동일) ...
     private void addRoomToTable(GameRoom room) {
         Object[] rowData = {
                 room.getRoomName(),
@@ -305,12 +325,8 @@ public class RoomListUI extends JFrame {
         tableModel.addRow(rowData);
     }
 
-    /**
-     * 서버 메시지 수신 스레드 (수정됨)
-     */
     class ListenNetwork extends Thread {
         public void run() {
-            // isRunning 플래그 확인
             while (isRunning) {
                 try {
                     String msg = dis.readUTF();
@@ -321,16 +337,13 @@ public class RoomListUI extends JFrame {
                     }
                     else if (msg.startsWith("/roomCreated ")) {
                         String roomId = msg.substring(13);
-                        GameRoom createdRoom = null;
-                        for (GameRoom room : roomMap.values()) {
-                            if (room.getRoomId().equals(roomId)) {
-                                createdRoom = room;
-                                break;
-                            }
+                        GameRoom createdRoom = roomMap.get(roomId);
+                        if (createdRoom == null && pendingRoom != null && pendingRoom.getRoomId().equals(roomId)) {
+                            createdRoom = pendingRoom;
                         }
                         if (createdRoom != null) {
                             openGameView(createdRoom, true);
-                            break; // [중요] 게임 화면으로 넘어가면 이 스레드는 즉시 종료해야 함
+                            break;
                         }
                     }
                     else if (msg.startsWith("/joinedRoom ")) {
@@ -339,8 +352,11 @@ public class RoomListUI extends JFrame {
                         if (joinedRoom != null) {
                             joinedRoom.addPlayer(userName);
                             openGameView(joinedRoom, false);
-                            break; // [중요] 게임 화면으로 넘어가면 이 스레드는 즉시 종료해야 함
+                            break;
                         }
+                    }
+                    else if (msg.startsWith("/playerJoined") || msg.startsWith("/playerLeft")) {
+                        requestRoomList();
                     }
                 } catch (IOException e) {
                     System.err.println("서버 연결 끊김 (RoomListUI)");
@@ -350,7 +366,6 @@ public class RoomListUI extends JFrame {
         }
     }
 
-    // ... (updateRoomList 메서드 기존 동일) ...
     private void updateRoomList(String roomData) {
         SwingUtilities.invokeLater(() -> {
             tableModel.setRowCount(0);

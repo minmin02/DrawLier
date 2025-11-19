@@ -9,7 +9,7 @@ import java.net.Socket;
 
 /**
  * 게임 클라이언트 뷰
- * 수정사항: 그리기 기능(DrawingPanel) 클래스 정의 위치 수정 및 오류 해결
+ * 수정사항: 방장 권한에 따른 '게임 시작' 버튼 제어 로직 강화
  */
 public class JavaChatClientView extends JFrame {
 
@@ -18,7 +18,7 @@ public class JavaChatClientView extends JFrame {
     private JTextField txtInput;
     private JTextArea textArea;
 
-    // [중요] DrawingPanel 변수 선언
+    // DrawingPanel 변수 선언
     private DrawingPanel drawingPanel;
 
     private JButton btnSend;
@@ -30,7 +30,7 @@ public class JavaChatClientView extends JFrame {
 
     private String userName;
     private GameRoom currentRoom;
-    private boolean isHost;
+    private boolean isHost; // 내가 방장인지 여부
 
     private Socket socket;
     private DataInputStream dis;
@@ -59,7 +59,7 @@ public class JavaChatClientView extends JFrame {
     }
 
     private void initializeUI() {
-        setTitle("DrawLier - " + currentRoom.getRoomName());
+        setTitle("DrawLier - " + currentRoom.getRoomName() + " [" + userName + "]");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setBounds(100, 100, 1200, 800);
 
@@ -73,15 +73,15 @@ public class JavaChatClientView extends JFrame {
         JPanel topPanel = createTopPanel();
         contentPane.add(topPanel, BorderLayout.NORTH);
 
-        // 중앙 패널
+        // 중앙 패널 (그리기 + 채팅)
         JSplitPane centerSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         centerSplitPane.setResizeWeight(0.7);
 
-        // [수정] 그리기 패널 객체 생성 (여기서 오류가 나지 않도록 아래에 클래스가 정의됨)
+        // 그리기 패널 생성
         drawingPanel = new DrawingPanel();
         drawingPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
 
-        // 그리기 도구 패널 (색상 선택, 지우기 등)
+        // 그리기 도구 패널
         JPanel drawContainer = new JPanel(new BorderLayout());
         drawContainer.add(drawingPanel, BorderLayout.CENTER);
         drawContainer.add(createToolPanel(), BorderLayout.SOUTH);
@@ -93,11 +93,11 @@ public class JavaChatClientView extends JFrame {
 
         contentPane.add(centerSplitPane, BorderLayout.CENTER);
 
-        // 우측 패널
+        // 우측 플레이어 패널
         playerPanel = createPlayerPanel();
         contentPane.add(playerPanel, BorderLayout.EAST);
 
-        // 하단 패널
+        // 하단 패널 (게임 시작 버튼 등)
         JPanel bottomPanel = createBottomPanel();
         contentPane.add(bottomPanel, BorderLayout.SOUTH);
 
@@ -231,23 +231,31 @@ public class JavaChatClientView extends JFrame {
         return panel;
     }
 
+    // [수정됨] 하단 패널 및 게임 시작 버튼 로직
     private JPanel createBottomPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         panel.setOpaque(false);
 
         btnStartGame = new JButton("게임 시작");
         btnStartGame.setFont(new Font("맑은 고딕", Font.BOLD, 16));
-        btnStartGame.setPreferredSize(new Dimension(200, 50));
+        btnStartGame.setPreferredSize(new Dimension(250, 50));
         btnStartGame.setBackground(new Color(40, 167, 69));
         btnStartGame.setForeground(Color.WHITE);
         btnStartGame.setFocusPainted(false);
 
-        if (!isHost) {
+        // 초기 버튼 상태 설정
+        if (isHost) {
+            if (currentRoom.getCurrentPlayers() < 4) {
+                btnStartGame.setEnabled(false);
+                btnStartGame.setText("4명이 모여야 시작 가능");
+            } else {
+                btnStartGame.setEnabled(true);
+                btnStartGame.setText("게임 시작");
+            }
+        } else {
+            // 방장이 아니면 무조건 비활성화
             btnStartGame.setEnabled(false);
-            btnStartGame.setText("방장만 시작 가능");
-        } else if (currentRoom.getCurrentPlayers() < 4) {
-            btnStartGame.setEnabled(false);
-            btnStartGame.setText("4명이 모여야 시작 가능");
+            btnStartGame.setText("방장이 게임을 시작합니다");
         }
 
         btnStartGame.addActionListener(e -> startGame());
@@ -291,9 +299,13 @@ public class JavaChatClientView extends JFrame {
     }
 
     private void startGame() {
+        // 클라이언트 측에서도 한 번 더 검사
+        if (!isHost) {
+            JOptionPane.showMessageDialog(this, "방장만 게임을 시작할 수 있습니다.", "알림", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         if (currentRoom.getCurrentPlayers() < 4) {
-            JOptionPane.showMessageDialog(this, "4명이 모여야 게임을 시작할 수 있습니다.",
-                    "알림", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "4명이 모여야 게임을 시작할 수 있습니다.", "알림", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -326,13 +338,12 @@ public class JavaChatClientView extends JFrame {
         textArea.setCaretPosition(textArea.getText().length());
     }
 
+    // [중요 수정] 플레이어 입장/퇴장 시 버튼 상태 업데이트 로직
     private void updatePlayerList(java.util.List<String> players) {
         SwingUtilities.invokeLater(() -> {
-            currentRoom.getPlayers().clear();
-            for (String player : players) {
-                currentRoom.getPlayers().add(player);
-            }
+            // 불필요한 데이터 조작 코드를 삭제하고, UI 갱신에만 집중합니다.
 
+            // 1. UI 리스트 갱신
             for (int i = 0; i < 4; i++) {
                 if (i < players.size()) {
                     String playerName = players.get(i);
@@ -351,18 +362,24 @@ public class JavaChatClientView extends JFrame {
             playerPanel.setBorder(BorderFactory.createTitledBorder(
                     "플레이어 (" + players.size() + "/" + currentRoom.getMaxPlayers() + ")"));
 
+            // 2. 방장 여부 및 인원수에 따른 버튼 상태 제어
             if (isHost) {
-                if (players.size() == 4) {
+                if (players.size() >= 4) {
                     btnStartGame.setEnabled(true);
                     btnStartGame.setText("게임 시작");
+                    btnStartGame.setBackground(new Color(40, 167, 69));
                 } else {
                     btnStartGame.setEnabled(false);
-                    btnStartGame.setText("4명이 모여야 시작 가능");
+                    btnStartGame.setText("4명이 모여야 시작 가능 (" + players.size() + "/4)");
+                    btnStartGame.setBackground(Color.GRAY);
                 }
+            } else {
+                btnStartGame.setEnabled(false);
+                btnStartGame.setText("방장이 게임을 시작합니다");
+                btnStartGame.setBackground(Color.GRAY);
             }
         });
     }
-
     class ListenNetwork extends Thread {
         public void run() {
             while (true) {
@@ -374,12 +391,20 @@ public class JavaChatClientView extends JFrame {
                             appendText("===== 게임이 시작되었습니다! =====");
                             startTimer();
                             btnStartGame.setEnabled(false);
+                            btnStartGame.setText("게임 진행 중");
                         });
                     }
+                    // [여기 수정] 플레이어 입장 처리 로직
                     else if (msg.startsWith("/playerJoined ")) {
                         String newPlayer = msg.substring(14);
+
+                        // 1. 일단 무조건 추가 시도 (중복 체크는 GameRoom 내부에서 처리됨)
                         currentRoom.addPlayer(newPlayer);
+
+                        // 2. 로그 출력
                         appendText("[입장] " + newPlayer + "님이 입장했습니다.");
+
+                        // 3. UI 갱신 (반드시 현재 룸의 최신 리스트를 넘겨야 함)
                         updatePlayerList(currentRoom.getPlayers());
                     }
                     else if (msg.startsWith("/playerLeft ")) {
@@ -394,6 +419,9 @@ public class JavaChatClientView extends JFrame {
                     else if (msg.startsWith("/clear")) {
                         drawingPanel.clear();
                     }
+                    else if (msg.startsWith("/loginOK")) {
+                        // pass
+                    }
                     else {
                         appendText(msg);
                     }
@@ -406,19 +434,17 @@ public class JavaChatClientView extends JFrame {
     }
 
     /**
-     * DrawingPanel 클래스 정의 (Inner Class)
-     * 반드시 JavaChatClientView 클래스 내부의 마지막 부분에 위치해야 함
+     * DrawingPanel 클래스 정의
      */
     class DrawingPanel extends JPanel {
-        private Image screenImage; // 더블 버퍼링용 이미지
+        private Image screenImage;
         private Graphics2D screenGraphic;
-        private int prevX, prevY; // 이전 좌표 저장용
+        private int prevX, prevY;
 
         public DrawingPanel() {
             setBackground(Color.WHITE);
             setPreferredSize(new Dimension(600, 500));
 
-            // 마우스 리스너 추가
             MyMouseListener mm = new MyMouseListener();
             addMouseListener(mm);
             addMouseMotionListener(mm);
@@ -427,13 +453,11 @@ public class JavaChatClientView extends JFrame {
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            // 저장된 이미지가 있으면 화면에 그린다 (창이 가려져도 그림 유지)
             if (screenImage != null) {
                 g.drawImage(screenImage, 0, 0, null);
             }
         }
 
-        // 화면 크기가 결정되거나 변경될 때 이미지 버퍼 생성
         public void checkImageBuffer() {
             if (screenImage == null) {
                 screenImage = createImage(getWidth(), getHeight());
@@ -444,7 +468,6 @@ public class JavaChatClientView extends JFrame {
             }
         }
 
-        // 서버로부터 받은 그리기 명령어 처리
         public void processDrawCommand(String command) {
             checkImageBuffer();
             try {
@@ -460,7 +483,7 @@ public class JavaChatClientView extends JFrame {
                 screenGraphic.setColor(new Color(r, g, b));
                 screenGraphic.setStroke(new BasicStroke(2));
                 screenGraphic.drawLine(x1, y1, x2, y2);
-                repaint(); // 화면 갱신
+                repaint();
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -474,7 +497,6 @@ public class JavaChatClientView extends JFrame {
             repaint();
         }
 
-        // 마우스 이벤트 핸들러
         class MyMouseListener extends MouseAdapter {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -488,19 +510,16 @@ public class JavaChatClientView extends JFrame {
                 int currX = e.getX();
                 int currY = e.getY();
 
-                // 1. 내 화면에 그리기
                 screenGraphic.setColor(currentColor);
                 screenGraphic.setStroke(new BasicStroke(2));
                 screenGraphic.drawLine(prevX, prevY, currX, currY);
                 repaint();
 
-                // 2. 서버로 좌표 전송 (/draw x1 y1 x2 y2 r g b)
                 String msg = String.format("/draw %d %d %d %d %d %d %d",
                         prevX, prevY, currX, currY,
                         currentColor.getRed(), currentColor.getGreen(), currentColor.getBlue());
                 sendProtocol(msg);
 
-                // 좌표 업데이트
                 prevX = currX;
                 prevY = currY;
             }

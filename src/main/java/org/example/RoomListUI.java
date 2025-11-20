@@ -10,7 +10,9 @@ import java.util.*;
 
 /**
  * 방 목록 UI
- * 수정사항: 버튼 클릭 이벤트 리스너 복구 및 디자인 유지
+ * 수정사항:
+ * 1. 게임 화면에서 복귀 시 소켓이 닫혀 발생하는 SocketException을 방지하기 위해 재연결 로직 추가.
+ * 2. JavaChatClientView.RoomLeaveListener 구현을 openGameView에 통합.
  */
 public class RoomListUI extends JFrame {
 
@@ -31,7 +33,8 @@ public class RoomListUI extends JFrame {
     private DataInputStream dis;
     private DataOutputStream dos;
 
-    private boolean isRunning = true;
+    private boolean isRunning = true; // 네트워크 리스너 상태 플래그
+    private Thread listenThread; // 리스너 스레드 참조
 
     public RoomListUI(String userName, String serverIp, String serverPort) {
         this.userName = userName;
@@ -46,6 +49,9 @@ public class RoomListUI extends JFrame {
 
     private void connectToServer() {
         try {
+            // 기존 연결 자원 정리
+            closeResources();
+
             socket = new Socket(serverIp, Integer.parseInt(serverPort));
             InputStream is = socket.getInputStream();
             dis = new DataInputStream(is);
@@ -59,12 +65,64 @@ public class RoomListUI extends JFrame {
                 throw new Exception("로그인 실패");
             }
 
-            new ListenNetwork().start();
+            // 새롭게 리스너 스레드 시작
+            isRunning = true;
+            listenThread = new ListenNetwork();
+            listenThread.start();
 
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "서버 연결 실패: " + e.getMessage(),
                     "오류", JOptionPane.ERROR_MESSAGE);
             System.exit(0);
+        }
+    }
+
+    // [추가] 소켓이 닫혔을 경우 다시 연결을 시도하는 메서드
+    private void reconnectToServer() {
+        // 기존 리스너 스레드를 안전하게 중단합니다.
+        if (listenThread != null) {
+            isRunning = false;
+            // 리스너 스레드가 I/O 블로킹 상태라면 interrupt()를 통해 해제 시도
+            if (listenThread.isAlive()) {
+                listenThread.interrupt();
+            }
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            setTitle("DrawLier - 방 목록 (재연결 중...)");
+        });
+
+        // 별도 스레드에서 재연결 시도
+        new Thread(() -> {
+            try {
+                Thread.sleep(300); // 잠시 대기
+                connectToServer();
+                SwingUtilities.invokeLater(() -> {
+                    setTitle("DrawLier - 방 목록");
+                    requestRoomList(); // 성공 시 목록 재요청
+                });
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, "서버 재연결 실패.",
+                            "오류", JOptionPane.ERROR_MESSAGE);
+                    setTitle("DrawLier - 방 목록 (연결 끊김)");
+                });
+            }
+        }).start();
+    }
+
+    // [추가] 자원을 안전하게 닫는 메서드
+    private void closeResources() {
+        try {
+            if (dos != null) dos.close();
+            if (dis != null) dis.close();
+            if (socket != null) socket.close();
+        } catch (IOException ex) {
+            // 무시
+        } finally {
+            dos = null;
+            dis = null;
+            socket = null;
         }
     }
 
@@ -76,12 +134,11 @@ public class RoomListUI extends JFrame {
 
         // 1. 배경 패널 설정
         JPanel contentPane = new JPanel() {
-            Image bgImage = new ImageIcon(getClass().getResource("/pino.jpg")).getImage();
-
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+                g.setColor(new Color(60, 60, 60)); // 배경색을 임시로 설정
+                g.fillRect(0, 0, getWidth(), getHeight());
             }
         };
 
@@ -144,17 +201,14 @@ public class RoomListUI extends JFrame {
 
         btnRefresh = new JButton("새로고침");
         styleButton(btnRefresh, new Color(255, 255, 255), Color.BLACK);
-        // [복구됨] 새로고침 버튼 기능
         btnRefresh.addActionListener(e -> requestRoomList());
 
         btnJoinRoom = new JButton("방 참가");
         styleButton(btnJoinRoom, new Color(66, 133, 244), Color.WHITE);
-        // [복구됨] 방 참가 버튼 기능
         btnJoinRoom.addActionListener(e -> joinSelectedRoom());
 
         btnCreateRoom = new JButton("방 만들기");
         styleButton(btnCreateRoom, new Color(220, 53, 69), Color.WHITE);
-        // [복구됨] 방 만들기 버튼 기능
         btnCreateRoom.addActionListener(e -> openCreateRoomDialog());
 
         buttonPanel.add(btnRefresh);
@@ -166,13 +220,8 @@ public class RoomListUI extends JFrame {
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent e) {
-                try {
-                    if (dos != null) dos.close();
-                    if (dis != null) dis.close();
-                    if (socket != null) socket.close();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
+                isRunning = false;
+                closeResources();
             }
         });
     }
@@ -186,15 +235,29 @@ public class RoomListUI extends JFrame {
         btn.setBorder(BorderFactory.createLineBorder(new Color(0,0,0,50), 1));
     }
 
+    // [수정됨] 소켓 상태를 확인하고 필요 시 재연결을 유도합니다.
     private void requestRoomList() {
+        if (socket == null || socket.isClosed() || dos == null) {
+            appendTextToConsole("소켓 연결이 끊어져 재연결을 시도합니다.");
+            reconnectToServer();
+            return;
+        }
+
         try {
             dos.writeUTF("/getRoomList");
         } catch (IOException e) {
-            e.printStackTrace();
+            appendTextToConsole("방 목록 요청 중 오류 발생, 재연결을 시도합니다.");
+            reconnectToServer();
         }
     }
 
+    // 콘솔 출력을 위한 헬퍼 (디버깅용)
+    private void appendTextToConsole(String message) {
+        System.err.println("[" + userName + "] " + message);
+    }
+
     private void openCreateRoomDialog() {
+        // (중략: 방 만들기 다이얼로그 로직)
         JDialog dialog = new JDialog(this, "방 만들기", true);
         dialog.setSize(400, 300);
         dialog.setLocationRelativeTo(this);
@@ -251,6 +314,11 @@ public class RoomListUI extends JFrame {
     }
 
     private void createRoom(String roomName, String category, int timeLimit) {
+        if (socket == null || socket.isClosed() || dos == null) {
+            JOptionPane.showMessageDialog(this, "서버 연결이 끊어졌습니다. 재연결 후 시도해주세요.", "오류", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         try {
             String roomId = UUID.randomUUID().toString().substring(0, 8);
             GameRoom newRoom = new GameRoom(roomId, roomName, userName, category, timeLimit);
@@ -264,6 +332,11 @@ public class RoomListUI extends JFrame {
     }
 
     private void joinSelectedRoom() {
+        if (socket == null || socket.isClosed() || dos == null) {
+            JOptionPane.showMessageDialog(this, "서버 연결이 끊어졌습니다. 재연결 후 시도해주세요.", "오류", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         int selectedRow = roomTable.getSelectedRow();
         if (selectedRow == -1) {
             JOptionPane.showMessageDialog(this, "참가할 방을 선택해주세요.", "알림", JOptionPane.WARNING_MESSAGE);
@@ -299,30 +372,32 @@ public class RoomListUI extends JFrame {
         }
     }
 
+    // [수정됨] openGameView: JavaChatClientView에 콜백 리스너를 전달합니다.
     private void openGameView(GameRoom room, boolean isHost) {
         try {
-            isRunning = false;
+            // 게임 화면에서 복귀 시 실행될 리스너 정의 (람다 표현식 사용)
+            JavaChatClientView.RoomLeaveListener listener = () -> SwingUtilities.invokeLater(() -> {
+                appendTextToConsole("게임 뷰에서 복귀, 소켓 재연결 시도...");
+                this.setVisible(true); // RoomListUI를 다시 표시
+                reconnectToServer(); // 재연결 후 목록 갱신을 리스너에게 위임
+            });
+
+            // ERROR FIX: JavaChatClientView 생성자에 listener를 마지막 인자로 추가합니다.
             JavaChatClientView gameView = new JavaChatClientView(
-                    userName, socket, dis, dos, room, isHost);
+                    userName, socket, dis, dos, room, isHost, listener);
+
+            // ListenNetwork 스레드가 잠시 대기하도록 플래그 변경
+            isRunning = false;
+
+            this.setVisible(false); // RoomListUI를 숨깁니다.
             gameView.setVisible(true);
-            this.dispose();
+
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "게임 화면 열기 실패: " + ex.getMessage(),
                     "오류", JOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
+            this.setVisible(true); // 오류 발생 시 목록 화면 유지
         }
-    }
-
-    private void addRoomToTable(GameRoom room) {
-        Object[] rowData = {
-                room.getRoomName(),
-                room.getHostName(),
-                room.getCurrentPlayers() + "/" + room.getMaxPlayers(),
-                room.getCategory(),
-                room.getTimeLimit() + "초",
-                room.getStatus() == GameRoom.RoomStatus.WAITING ? "대기중" : "게임중"
-        };
-        tableModel.addRow(rowData);
     }
 
     class ListenNetwork extends Thread {
@@ -343,7 +418,6 @@ public class RoomListUI extends JFrame {
                         }
                         if (createdRoom != null) {
                             openGameView(createdRoom, true);
-                            break;
                         }
                     }
                     else if (msg.startsWith("/joinedRoom ")) {
@@ -352,14 +426,15 @@ public class RoomListUI extends JFrame {
                         if (joinedRoom != null) {
                             joinedRoom.addPlayer(userName);
                             openGameView(joinedRoom, false);
-                            break;
                         }
                     }
                     else if (msg.startsWith("/playerJoined") || msg.startsWith("/playerLeft")) {
                         requestRoomList();
                     }
                 } catch (IOException e) {
-                    System.err.println("서버 연결 끊김 (RoomListUI)");
+                    appendTextToConsole("서버 연결 끊김 (RoomListUI)");
+                    // 소켓이 닫혔음을 감지하면 리스너 스레드 종료
+                    isRunning = false;
                     break;
                 }
             }
@@ -386,5 +461,17 @@ public class RoomListUI extends JFrame {
                 }
             }
         });
+    }
+
+    private void addRoomToTable(GameRoom room) {
+        Object[] rowData = {
+                room.getRoomName(),
+                room.getHostName(),
+                room.getCurrentPlayers() + "/" + room.getMaxPlayers(),
+                room.getCategory(),
+                room.getTimeLimit() + "초",
+                room.getStatus() == GameRoom.RoomStatus.WAITING ? "대기중" : "게임중"
+        };
+        tableModel.addRow(rowData);
     }
 }

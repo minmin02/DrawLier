@@ -3,9 +3,9 @@ package org.example;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
+/*
  * 게임 방 정보를 담는 클래스
- * 수정사항: addPlayer 메서드에서 인원수 체크 로직을 players.size() 기준으로 변경하여 동기화 문제 해결
+ * 수정사항: 방장 퇴장 시 다음 인덱스 플레이어에게 방장 권한을 위임하는 로직을 확인 및 강화.
  */
 public class GameRoom {
     private String roomId;           // 방 고유 ID
@@ -37,32 +37,40 @@ public class GameRoom {
         this.players.add(hostName);
     }
 
-    // [핵심 수정] 플레이어 추가 로직 변경
+    // 플레이어 추가
     public boolean addPlayer(String playerName) {
-        // 이미 있는 플레이어라면 성공으로 처리
         if (players.contains(playerName)) {
             return true;
         }
 
-        // [수정] currentPlayers(숫자) 대신 players.size()(실제 리스트)를 기준으로 판단
-        // 이렇게 해야 서버에서 숫자만 4로 오고 명단이 비어있을 때도 정상적으로 추가됨
         if (players.size() < maxPlayers) {
             players.add(playerName);
-            currentPlayers = players.size(); // 숫자도 실제 크기에 맞춰 갱신
+            currentPlayers = players.size();
             return true;
         }
         return false;
     }
 
-    // 플레이어 제거
+    /**
+     * 플레이어를 제거하고 방장이 퇴장했을 경우 다음 플레이어에게 권한을 위임합니다.
+     * @param playerName 제거할 플레이어 이름
+     * @return 성공 여부
+     */
     public boolean removePlayer(String playerName) {
-        if (players.remove(playerName)) {
-            currentPlayers = players.size(); // 리스트 크기에 맞춰 갱신
+        boolean wasHost = playerName.equals(hostName);
 
-            // 방장이 나가면 다음 사람을 방장으로
-            if (playerName.equals(hostName) && !players.isEmpty()) {
+        if (players.remove(playerName)) {
+            currentPlayers = players.size();
+
+            // 1. 나간 플레이어가 방장이었고 (wasHost == true)
+            // 2. 방에 다른 플레이어가 남아 있다면 (!players.isEmpty())
+            if (wasHost && !players.isEmpty()) {
+                // 남아있는 플레이어 목록의 첫 번째 사람(다음 인덱스)에게 방장 권한 위임
                 hostName = players.get(0);
             }
+            // 3. 방에 아무도 없다면 (players.isEmpty()), hostName은 마지막으로 나간 사람 이름으로 유지되지만,
+            // 이 경우 서버 측에서 해당 방을 삭제해야 합니다. (클라이언트 로직에서는 방장 위임만 처리)
+
             return true;
         }
         return false;
@@ -82,7 +90,7 @@ public class GameRoom {
     public String getRoomId() { return roomId; }
     public String getRoomName() { return roomName; }
     public String getHostName() { return hostName; }
-    public int getCurrentPlayers() { return currentPlayers; } // 단순히 표시용으로 사용
+    public int getCurrentPlayers() { return currentPlayers; }
     public int getMaxPlayers() { return maxPlayers; }
     public String getCategory() { return category; }
     public int getTimeLimit() { return timeLimit; }
@@ -117,8 +125,9 @@ public class GameRoom {
         String[] parts = protocol.split("\\|");
         if (parts.length < 9) return null;
 
-        GameRoom room = new GameRoom(parts[0], parts[1], parts[2], parts[5], Integer.parseInt(parts[6]));
-        room.currentPlayers = Integer.parseInt(parts[3]); // 서버에서 온 숫자 적용
+        String protocolHostName = parts[2];
+        GameRoom room = new GameRoom(parts[0], parts[1], protocolHostName, parts[5], Integer.parseInt(parts[6]));
+        room.currentPlayers = Integer.parseInt(parts[3]);
         room.status = RoomStatus.valueOf(parts[7]);
 
         // 플레이어 목록 복원
@@ -130,8 +139,21 @@ public class GameRoom {
             }
         }
 
-        // [안전장치] 만약 복원된 리스트 크기가 currentPlayers보다 작다면 리스트 크기를 우선하지 않더라도
-        // addPlayer 메서드에서 처리가 가능하도록 위에서 수정함.
+        // 복원된 플레이어 목록이 비어있지 않고, 서버가 보낸 호스트 이름(protocolHostName)이
+        // 현재 목록의 첫 번째 플레이어와 다를 경우, 서버 정보를 신뢰하여 갱신합니다.
+        if (!room.players.isEmpty()) {
+            // 호스트 이름은 서버가 정해주는 것이므로, 프로토콜 문자열의 호스트 이름을 따릅니다.
+            room.hostName = protocolHostName;
+
+            // [안전 장치] 만약 프로토콜의 호스트 이름이 복원된 players 목록의 첫 번째 사람이 아니라면,
+            // players.get(0)이 새로운 호스트가 되도록 로직을 추가합니다. (이것이 방장 위임의 결과여야 함)
+            if (!room.players.get(0).equals(room.hostName)) {
+                room.hostName = room.players.get(0);
+            }
+        } else {
+            // 방이 비어있다면, hostName은 마지막 호스트 이름으로 유지됩니다.
+            room.hostName = protocolHostName;
+        }
 
         return room;
     }

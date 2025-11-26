@@ -20,7 +20,7 @@ public class LiarGameClientLoginUI extends JFrame {
     private JTextField txtPort;
     private JButton btnEnterGame;
 
-    // 플레이스홀더 텍스트 필드
+    // 플레이스홀더 텍스트 필드 (기존 코드 유지)
     class PlaceholderTextField extends JTextField implements FocusListener {
         private String placeholder;
         private boolean isEmpty;
@@ -31,8 +31,12 @@ public class LiarGameClientLoginUI extends JFrame {
             setText(placeholder);
             setForeground(new Color(150, 150, 150));
             addFocusListener(this);
-            setColumns(15);
-            setPreferredSize(new Dimension(getPreferredSize().width, 42));
+
+            // 가로 크기 줄이기
+            setColumns(20); // 15에서 더 작게 조절 (원하는 크기로)
+            setMaximumSize(new Dimension(400, 40)); // 최대 너비 제한
+            setPreferredSize(new Dimension(350, 40)); // 선호 크기 설정
+
             setFont(new Font("맑은 고딕", Font.PLAIN, 14));
             setBackground(new Color(255, 255, 255, 200));
             setOpaque(true);
@@ -92,49 +96,26 @@ public class LiarGameClientLoginUI extends JFrame {
     public LiarGameClientLoginUI() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setTitle("DrawLier - Liar Game Client");
-        setBounds(100, 100, 400, 700);
+
+        // [수정 1] 가로 너비를 400 -> 600으로 변경
+        setBounds(100, 100, 1100, 900);
+
         contentPane = new BackgroundPanel("UserStart.jpg");
-        contentPane.setBorder(new EmptyBorder(30, 30, 30, 30));
+        contentPane.setBorder(new EmptyBorder(30, 80, 30, 20)); // 너비가 넓어졌으므로 좌우 여백을 조금 더 줌
         setContentPane(contentPane);
         contentPane.setLayout(new BorderLayout(0, 20));
 
-        // 상단 제목 패널
-        JPanel titlePanel = new JPanel();
-        titlePanel.setOpaque(false);
-        titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
 
-        JLabel lblMainTitle = new JLabel();
-        try {
-            ImageIcon titleIcon = new ImageIcon(getClass().getResource("/DrawLierLogo.png"));
-            Image titleImage = titleIcon.getImage().getScaledInstance(250, 80, Image.SCALE_SMOOTH);
-            lblMainTitle.setIcon(new ImageIcon(titleImage));
-        } catch (Exception e) {
-            lblMainTitle.setText("DrawLier");
-            lblMainTitle.setFont(new Font("맑은 고딕", Font.BOLD, 38));
-            lblMainTitle.setForeground(Color.WHITE);
-        }
-        lblMainTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        titlePanel.add(lblMainTitle);
-
-        titlePanel.add(Box.createVerticalStrut(5));
-
-        JLabel lblSubTitle = new JLabel("Enter the Game");
-        lblSubTitle.setFont(new Font("맑은 고딕", Font.PLAIN, 16));
-        lblSubTitle.setForeground(new Color(230, 230, 230));
-        lblSubTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        titlePanel.add(lblSubTitle);
-
-        contentPane.add(titlePanel, BorderLayout.NORTH);
 
         // 입력 필드 패널
         JPanel inputPanel = new JPanel();
         inputPanel.setOpaque(false);
-        inputPanel.setLayout(new GridLayout(6, 1, 0, 12));
-        inputPanel.setBorder(new EmptyBorder(20, 10, 20, 10));
+        inputPanel.setLayout(new GridLayout(6, 1, 0, 8)); // 세로 간격을 12 -> 8로 줄임
+        inputPanel.setBorder(new EmptyBorder(300, 150, 50, 150)); // 상단 여백을 늘려서 아래로 내림 (20->300)
 
         JLabel lblIp = new JLabel("Server IP");
         lblIp.setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        lblIp.setForeground(Color.WHITE);
+        lblIp.setForeground(Color.BLACK);
         inputPanel.add(lblIp);
         txtIpAddress = new PlaceholderTextField("Enter server IP address");
         txtIpAddress.setText("127.0.0.1");
@@ -144,14 +125,14 @@ public class LiarGameClientLoginUI extends JFrame {
 
         JLabel lblNickname = new JLabel("Nickname");
         lblNickname.setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        lblNickname.setForeground(Color.WHITE);
+        lblNickname.setForeground(Color.BLACK);
         inputPanel.add(lblNickname);
         txtNickname = new PlaceholderTextField("Enter your nickname");
         inputPanel.add(txtNickname);
 
         JLabel lblPort = new JLabel("Port");
         lblPort.setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        lblPort.setForeground(Color.WHITE);
+        lblPort.setForeground(Color.BLACK);
         inputPanel.add(lblPort);
         txtPort = new PlaceholderTextField("Enter port number");
         txtPort.setText("30000");
@@ -167,25 +148,41 @@ public class LiarGameClientLoginUI extends JFrame {
         buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
         buttonPanel.setBorder(new EmptyBorder(10, 10, 0, 10));
 
-        btnEnterGame = new JButton("입장하기");
-        btnEnterGame.setFont(new Font("맑은 고딕", Font.BOLD, 16));
-        btnEnterGame.setBackground(new Color(220, 53, 69));
-        btnEnterGame.setForeground(Color.WHITE);
-        btnEnterGame.setFocusPainted(false);
-        btnEnterGame.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 43, 59), 2, true),
-                BorderFactory.createEmptyBorder(12, 0, 12, 0)
-        ));
-        btnEnterGame.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
+        // [수정 2] 버튼을 이미지로 교체
+        btnEnterGame = new JButton(); // 텍스트 제거
+
+        try {
+            // 이미지 로드 및 크기 조절
+            ImageIcon icon = new ImageIcon(getClass().getResource("/EnterButton.png"));
+
+            // 이미지가 제대로 로드되었는지 확인
+            if (icon.getIconWidth() == -1) {
+                throw new Exception("이미지를 찾을 수 없습니다.");
+            }
+
+            Image img = icon.getImage().getScaledInstance(220, 60, Image.SCALE_SMOOTH);
+            btnEnterGame.setIcon(new ImageIcon(img));
+
+            btnEnterGame.setBorderPainted(false);
+            btnEnterGame.setContentAreaFilled(false);
+            btnEnterGame.setFocusPainted(false);
+            btnEnterGame.setOpaque(false);
+
+        } catch (Exception e) {
+            // 이미지가 없을 경우 텍스트 버튼으로 대체
+            btnEnterGame.setText("시작하기 ≫");
+            btnEnterGame.setFont(new Font("맑은 고딕", Font.BOLD, 18));
+            btnEnterGame.setBackground(Color.BLACK);
+            btnEnterGame.setForeground(Color.WHITE);
+            btnEnterGame.setPreferredSize(new Dimension(220, 60));
+            System.err.println("EnterButton.png 이미지를 찾을 수 없습니다: " + e.getMessage());
+        }
         btnEnterGame.setAlignmentX(Component.CENTER_ALIGNMENT);
-        btnEnterGame.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                btnEnterGame.setBackground(new Color(200, 43, 59));
-            }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                btnEnterGame.setBackground(new Color(220, 53, 69));
-            }
-        });
+
+        // 이미지 버튼이므로 기존의 배경색 변경 마우스 리스너는 제거하거나,
+        // 필요하다면 이미지를 바꾸는 로직(롤오버 이미지 등)으로 변경해야 함.
+        // 여기서는 단순화를 위해 기존 색상 변경 리스너 제거.
+
         buttonPanel.add(btnEnterGame);
 
         contentPane.add(buttonPanel, BorderLayout.SOUTH);

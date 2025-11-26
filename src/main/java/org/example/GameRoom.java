@@ -1,138 +1,279 @@
 package org.example;
 
+import javax.swing.Timer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * 게임 방 정보를 담는 클래스
- * 수정사항: addPlayer 메서드에서 인원수 체크 로직을 players.size() 기준으로 변경하여 동기화 문제 해결
+ * 턴 기반 게임룸 관리 클래스
+ * - 4명의 플레이어
+ * - 각 플레이어당 15초씩 4라운드
+ * - 투표 시스템 관리
  */
 public class GameRoom {
-    private String roomId;           // 방 고유 ID
-    private String roomName;         // 방 이름
-    private String hostName;         // 방장 이름
-    private int currentPlayers;      // 현재 인원 (서버 정보용)
-    private int maxPlayers;          // 최대 인원 (기본 4명)
-    private String category;         // 카테고리
-    private int timeLimit;           // 제한 시간 (초)
-    private RoomStatus status;       // 방 상태
-    private List<String> players;    // 참여 플레이어 목록
+    private String roomId;
+    private String roomName;
+    private String hostName;
+    private String category;
+    private int maxPlayers;
 
-    public enum RoomStatus {
-        WAITING,    // 대기 중
-        PLAYING,    // 게임 중
-        FINISHED    // 게임 종료
+    private List<String> players;
+    private int currentTurnIndex;
+    private int currentRound;
+    private boolean isGameRunning;
+    private Timer turnTimer;
+    private GameEventListener eventListener;
+
+    // 게임 설정
+    private static final int TURN_TIME_SECONDS = 15;
+    private static final int MAX_ROUNDS = 4;
+    private static final int REQUIRED_PLAYERS = 4;
+
+    private int remainingSeconds;
+
+    // 투표 관련
+    private Map<String, String> votes; // voterName -> votedPlayer
+    private boolean isVotingPhase;
+
+    public interface GameEventListener {
+        void onTurnChanged(int turnIndex, int round, String currentPlayer);
+        void onGameEnded();
+        void onTimerTick(int remainingSeconds);
+        void onVoteComplete(String maxVotedPlayer, Map<String, Integer> voteCount);
     }
 
-    public GameRoom(String roomId, String roomName, String hostName, String category, int timeLimit) {
+    public GameRoom(String roomId, String roomName, String hostName, String category, int maxPlayers) {
         this.roomId = roomId;
         this.roomName = roomName;
         this.hostName = hostName;
         this.category = category;
-        this.timeLimit = timeLimit;
-        this.currentPlayers = 1;
-        this.maxPlayers = 4;
-        this.status = RoomStatus.WAITING;
+        this.maxPlayers = maxPlayers;
         this.players = new ArrayList<>();
-        this.players.add(hostName);
+        this.currentTurnIndex = 0;
+        this.currentRound = 1;
+        this.isGameRunning = false;
+        this.remainingSeconds = TURN_TIME_SECONDS;
+        this.votes = new HashMap<>();
+        this.isVotingPhase = false;
     }
 
-    // [핵심 수정] 플레이어 추가 로직 변경
-    public boolean addPlayer(String playerName) {
-        // 이미 있는 플레이어라면 성공으로 처리
-        if (players.contains(playerName)) {
-            return true;
-        }
-
-        // [수정] currentPlayers(숫자) 대신 players.size()(실제 리스트)를 기준으로 판단
-        // 이렇게 해야 서버에서 숫자만 4로 오고 명단이 비어있을 때도 정상적으로 추가됨
-        if (players.size() < maxPlayers) {
+    public void addPlayer(String playerName) {
+        if (!players.contains(playerName) && players.size() < maxPlayers) {
             players.add(playerName);
-            currentPlayers = players.size(); // 숫자도 실제 크기에 맞춰 갱신
-            return true;
         }
-        return false;
     }
 
-    // 플레이어 제거
-    public boolean removePlayer(String playerName) {
-        if (players.remove(playerName)) {
-            currentPlayers = players.size(); // 리스트 크기에 맞춰 갱신
-
-            // 방장이 나가면 다음 사람을 방장으로
-            if (playerName.equals(hostName) && !players.isEmpty()) {
-                hostName = players.get(0);
-            }
-            return true;
-        }
-        return false;
+    public void removePlayer(String playerName) {
+        players.remove(playerName);
     }
 
-    // 방이 가득 찼는지 확인
-    public boolean isFull() {
-        return players.size() >= maxPlayers;
-    }
-
-    // 게임 시작 가능한지 확인
     public boolean canStartGame() {
-        return players.size() == maxPlayers && status == RoomStatus.WAITING;
+        return players.size() == REQUIRED_PLAYERS && !isGameRunning;
     }
 
-    // Getters and Setters
+    public void startGame(GameEventListener listener) {
+        if (!canStartGame()) {
+            return;
+        }
+
+        this.eventListener = listener;
+        this.isGameRunning = true;
+        this.currentTurnIndex = 0;
+        this.currentRound = 1;
+        this.remainingSeconds = TURN_TIME_SECONDS;
+
+        startTurnTimer();
+        notifyTurnChange();
+    }
+
+    private void startTurnTimer() {
+        if (turnTimer != null) {
+            turnTimer.stop();
+        }
+
+        remainingSeconds = TURN_TIME_SECONDS;
+
+        turnTimer = new Timer(1000, e -> {
+            remainingSeconds--;
+
+            if (eventListener != null) {
+                eventListener.onTimerTick(remainingSeconds);
+            }
+
+            if (remainingSeconds <= 0) {
+                nextTurn();
+            }
+        });
+
+        turnTimer.start();
+    }
+
+    private void nextTurn() {
+        if (turnTimer != null) {
+            turnTimer.stop();
+        }
+
+        currentTurnIndex++;
+
+        // 모든 플레이어가 턴을 마쳤으면 다음 라운드로
+        if (currentTurnIndex >= players.size()) {
+            currentTurnIndex = 0;
+            currentRound++;
+
+            // 4라운드가 끝나면 게임 종료 및 투표 시작
+            if (currentRound > MAX_ROUNDS) {
+                endGame();
+                return;
+            }
+        }
+
+        remainingSeconds = TURN_TIME_SECONDS;
+        startTurnTimer();
+        notifyTurnChange();
+    }
+
+    private void notifyTurnChange() {
+        if (eventListener != null && !players.isEmpty()) {
+            String currentPlayer = players.get(currentTurnIndex);
+            eventListener.onTurnChanged(currentTurnIndex, currentRound, currentPlayer);
+        }
+    }
+
+    private void endGame() {
+        isGameRunning = false;
+        if (turnTimer != null) {
+            turnTimer.stop();
+            turnTimer = null;
+        }
+
+        if (eventListener != null) {
+            eventListener.onGameEnded();
+        }
+
+        // 투표 단계 시작
+        startVotingPhase();
+    }
+
+    public void stopGame() {
+        endGame();
+    }
+
+    // 현재 턴인 플레이어인지 확인
+    public boolean isPlayerTurn(String playerName) {
+        if (!isGameRunning || players.isEmpty()) {
+            return false;
+        }
+        return players.get(currentTurnIndex).equals(playerName);
+    }
+
+    // 게임 상태를 문자열로 반환 (클라이언트에게 전송용)
+    public String getGameStateString() {
+        if (players.isEmpty()) {
+            return "/gameState|0|1|NONE|15";
+        }
+
+        String currentPlayer = players.get(currentTurnIndex);
+        return String.format("/gameState|%d|%d|%s|%d",
+                currentTurnIndex, currentRound, currentPlayer, remainingSeconds);
+    }
+
+    // ===== 투표 관련 메서드 =====
+
+    /**
+     * 투표 단계 시작
+     */
+    private void startVotingPhase() {
+        this.isVotingPhase = true;
+        this.votes.clear();
+    }
+
+    /**
+     * 플레이어의 투표 추가
+     * @return 모든 플레이어가 투표를 완료했는지 여부
+     */
+    public boolean addVote(String voterName, String votedPlayer) {
+        if (!isVotingPhase) {
+            return false;
+        }
+
+        // 자기 자신에게 투표 불가
+        if (voterName.equals(votedPlayer)) {
+            return false;
+        }
+
+        // 존재하지 않는 플레이어에게 투표 불가
+        if (!players.contains(votedPlayer)) {
+            return false;
+        }
+
+        votes.put(voterName, votedPlayer);
+
+        // 모든 플레이어가 투표했는지 확인
+        if (votes.size() == players.size()) {
+            processVoteResult();
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 투표 결과 집계
+     */
+    private void processVoteResult() {
+        // 득표수 집계
+        Map<String, Integer> voteCount = new HashMap<>();
+        for (String player : players) {
+            voteCount.put(player, 0);
+        }
+
+        for (String votedPlayer : votes.values()) {
+            voteCount.put(votedPlayer, voteCount.get(votedPlayer) + 1);
+        }
+
+        // 최다 득표자 찾기
+        String maxVotedPlayer = "";
+        int maxVotes = 0;
+
+        for (Map.Entry<String, Integer> entry : voteCount.entrySet()) {
+            if (entry.getValue() > maxVotes) {
+                maxVotes = entry.getValue();
+                maxVotedPlayer = entry.getKey();
+            }
+        }
+
+        // 리스너에게 결과 전달
+        if (eventListener != null) {
+            eventListener.onVoteComplete(maxVotedPlayer, voteCount);
+        }
+
+        // 투표 단계 종료
+        isVotingPhase = false;
+    }
+
+    /**
+     * 현재 투표 진행 상황 반환
+     */
+    public String getVoteStatus() {
+        return votes.size() + "/" + players.size();
+    }
+
+    // Getters
     public String getRoomId() { return roomId; }
     public String getRoomName() { return roomName; }
     public String getHostName() { return hostName; }
-    public int getCurrentPlayers() { return currentPlayers; } // 단순히 표시용으로 사용
-    public int getMaxPlayers() { return maxPlayers; }
     public String getCategory() { return category; }
-    public int getTimeLimit() { return timeLimit; }
-    public RoomStatus getStatus() { return status; }
-    public void setStatus(RoomStatus status) { this.status = status; }
+    public int getMaxPlayers() { return maxPlayers; }
     public List<String> getPlayers() { return new ArrayList<>(players); }
-
-    @Override
-    public String toString() {
-        return String.format("%s [%d/%d] - %s (%s)",
-                roomName, currentPlayers, maxPlayers, category,
-                status == RoomStatus.WAITING ? "대기중" : status == RoomStatus.PLAYING ? "게임중" : "종료");
-    }
-
-    // 방 정보를 프로토콜 문자열로 변환
-    public String toProtocolString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(roomId).append("|");
-        sb.append(roomName).append("|");
-        sb.append(hostName).append("|");
-        sb.append(currentPlayers).append("|");
-        sb.append(maxPlayers).append("|");
-        sb.append(category).append("|");
-        sb.append(timeLimit).append("|");
-        sb.append(status.name()).append("|");
-        sb.append(String.join(",", players));
-        return sb.toString();
-    }
-
-    // 프로토콜 문자열에서 방 정보 복원
-    public static GameRoom fromProtocolString(String protocol) {
-        String[] parts = protocol.split("\\|");
-        if (parts.length < 9) return null;
-
-        GameRoom room = new GameRoom(parts[0], parts[1], parts[2], parts[5], Integer.parseInt(parts[6]));
-        room.currentPlayers = Integer.parseInt(parts[3]); // 서버에서 온 숫자 적용
-        room.status = RoomStatus.valueOf(parts[7]);
-
-        // 플레이어 목록 복원
-        room.players.clear();
-        if (!parts[8].isEmpty()) {
-            String[] playerNames = parts[8].split(",");
-            for (String name : playerNames) {
-                room.players.add(name);
-            }
-        }
-
-        // [안전장치] 만약 복원된 리스트 크기가 currentPlayers보다 작다면 리스트 크기를 우선하지 않더라도
-        // addPlayer 메서드에서 처리가 가능하도록 위에서 수정함.
-
-        return room;
+    public int getCurrentTurnIndex() { return currentTurnIndex; }
+    public int getCurrentRound() { return currentRound; }
+    public boolean isGameRunning() { return isGameRunning; }
+    public boolean isVotingPhase() { return isVotingPhase; }
+    public int getRemainingSeconds() { return remainingSeconds; }
+    public String getCurrentPlayer() {
+        if (players.isEmpty()) return "";
+        return players.get(currentTurnIndex);
     }
 }

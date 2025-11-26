@@ -4,14 +4,16 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.colorchooser.AbstractColorChooserPanel;
 import java.io.*;
 import java.net.Socket;
+import java.util.List;
 
 /**
- * 게임 클라이언트 뷰
- * 수정사항: 방장 권한에 따른 '게임 시작' 버튼 제어 로직 강화
- * 수정사항: 지우개, 굵기 조절 기능 추가
+ * 게임 클라이언트 뷰 - 턴 기반 시스템 강화
+ * - 4명 플레이어 대기
+ * - 15초 턴 타이머
+ * - 턴이 아닐 때 그리기/채팅 차단
+ * - 게임 종료 후 투표 UI로 전환
  */
 public class JavaChatClientView extends JFrame {
 
@@ -20,7 +22,6 @@ public class JavaChatClientView extends JFrame {
     private JTextField txtInput;
     private JTextArea textArea;
 
-    // DrawingPanel 변수 선언
     private DrawingPanel drawingPanel;
 
     private JButton btnSend;
@@ -28,39 +29,38 @@ public class JavaChatClientView extends JFrame {
     private JLabel[] playerLabels;
     private JLabel lblRoomInfo;
     private JLabel lblTimer;
+    private JLabel lblCurrentTurn;
     private JPanel playerPanel;
 
     private String userName;
     private GameRoom currentRoom;
-    private boolean isHost; // 내가 방장인지 여부
+    private boolean isHost;
+    private String serverIp;
+    private String serverPort;
 
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
 
-    private Timer gameTimer;
-    private int remainingTime;
-
-    private JButton btnColorPicker; // 색상 선택 버튼 필드 추가 (툴 강조용)
-    private JButton btnEraserTool; //지우개
+    private JButton btnColorPicker;
+    private JButton btnEraserTool;
 
     private Color currentColor = Color.BLACK;
-    private int strokeWidth = 2; // 그리기 굵기 (기본값: 2)
+    private int strokeWidth = 2;
     private final Color DRAWING_BG_COLOR = Color.WHITE;
 
     public JavaChatClientView(String userName, Socket socket, DataInputStream dis,
-                              DataOutputStream dos, GameRoom room, boolean isHost) {
+                              DataOutputStream dos, GameRoom room, boolean isHost, String serverIp, String serverPort) {
         this.userName = userName;
         this.socket = socket;
         this.dis = dis;
         this.dos = dos;
         this.currentRoom = room;
         this.isHost = isHost;
-        this.remainingTime = room.getTimeLimit();
+        this.serverIp = serverIp;
+        this.serverPort = serverPort;
 
         initializeUI();
-
-        // 수신 스레드 시작
         new ListenNetwork().start();
     }
 
@@ -75,19 +75,15 @@ public class JavaChatClientView extends JFrame {
         contentPane.setBackground(Color.WHITE);
         setContentPane(contentPane);
 
-        // 상단 패널
         JPanel topPanel = createTopPanel();
         contentPane.add(topPanel, BorderLayout.NORTH);
 
-        // 중앙 패널 (그리기 + 채팅)
         JSplitPane centerSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         centerSplitPane.setResizeWeight(0.7);
 
-        // 그리기 패널 생성
         drawingPanel = new DrawingPanel();
         drawingPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
 
-        // 그리기 도구 패널
         JPanel drawContainer = new JPanel(new BorderLayout());
         drawContainer.add(drawingPanel, BorderLayout.CENTER);
         drawContainer.add(createToolPanel(), BorderLayout.SOUTH);
@@ -99,11 +95,9 @@ public class JavaChatClientView extends JFrame {
 
         contentPane.add(centerSplitPane, BorderLayout.CENTER);
 
-        // 우측 플레이어 패널
         playerPanel = createPlayerPanel();
         contentPane.add(playerPanel, BorderLayout.EAST);
 
-        // 하단 패널 (게임 시작 버튼 등)
         JPanel bottomPanel = createBottomPanel();
         contentPane.add(bottomPanel, BorderLayout.SOUTH);
 
@@ -116,7 +110,7 @@ public class JavaChatClientView extends JFrame {
             }
         });
     }
-    //선택된 버튼 강조 기능
+
     private void updateToolButtons(JButton activeTool) {
         if (btnColorPicker != null) btnColorPicker.setBorder(UIManager.getBorder("Button.border"));
         if (btnEraserTool != null) btnEraserTool.setBorder(UIManager.getBorder("Button.border"));
@@ -130,7 +124,6 @@ public class JavaChatClientView extends JFrame {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         panel.setBackground(new Color(240, 240, 240));
 
-        // --- 굵기 선택 콤보박스 ---
         String[] widths = {"1", "2", "4", "8", "12"};
         JComboBox<String> strokeSelector = new JComboBox<>(widths);
         strokeSelector.setSelectedItem("2");
@@ -145,10 +138,8 @@ public class JavaChatClientView extends JFrame {
         panel.add(new JLabel("굵기:"));
         panel.add(strokeSelector);
 
-        // --- 색상 선택 버튼 (JColorChooser 호출) ---
         btnColorPicker = new JButton("색상 선택");
         btnColorPicker.setPreferredSize(new Dimension(120, 30));
-
         btnColorPicker.setBackground(currentColor);
         btnColorPicker.setForeground(Color.WHITE);
         btnColorPicker.setOpaque(true);
@@ -156,48 +147,44 @@ public class JavaChatClientView extends JFrame {
         updateToolButtons(btnColorPicker);
 
         btnColorPicker.addActionListener(e -> {
+            if (!currentRoom.isPlayerTurn(userName)) {
+                JOptionPane.showMessageDialog(this, "당신의 턴이 아닙니다!", "알림", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             updateToolButtons(btnColorPicker);
 
-            final JColorChooser colorChooser = new JColorChooser(currentColor);
-            colorChooser.setPreviewPanel(new JPanel());
-
-            AbstractColorChooserPanel[] panels = colorChooser.getChooserPanels();
-            //Swatches 탭만 활성화하기 위한 로직
-            for (AbstractColorChooserPanel c : panels) {
-                if (!c.getDisplayName().equals("Swatches")) {
-                    colorChooser.removeChooserPanel(c);
-                }
-            }
-
-            JDialog dialog = JColorChooser.createDialog(
-                    this,
-                    "색상 팔레트",
-                    true,
-                    colorChooser,
-                    a -> {
-                        Color selectedColor = colorChooser.getColor();
-                        if (selectedColor != null) {
-                            currentColor = selectedColor;
-                            btnColorPicker.setBackground(currentColor);
-                            btnColorPicker.setForeground(Color.WHITE);
-                        }
-                    },
-                    b -> {}
+            Color newColor = JColorChooser.showDialog(
+                    JavaChatClientView.this,
+                    "색상 선택",
+                    currentColor
             );
-            dialog.setVisible(true);
+
+            if (newColor != null) {
+                currentColor = newColor;
+                btnColorPicker.setBackground(currentColor);
+
+                int brightness = (newColor.getRed() + newColor.getGreen() + newColor.getBlue()) / 3;
+                btnColorPicker.setForeground(brightness > 128 ? Color.BLACK : Color.WHITE);
+            }
         });
 
-        // --- 지우개 툴 버튼 (부분 지우개) ---
         btnEraserTool = new JButton("지우개");
         btnEraserTool.setPreferredSize(new Dimension(80, 30));
         btnEraserTool.addActionListener(e -> {
+            if (!currentRoom.isPlayerTurn(userName)) {
+                JOptionPane.showMessageDialog(this, "당신의 턴이 아닙니다!", "알림", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             currentColor = DRAWING_BG_COLOR;
             updateToolButtons(btnEraserTool);
         });
 
-        // --- 전체 지우기 버튼 ---
         JButton btnClearAll = new JButton("전체 지우기");
         btnClearAll.addActionListener(e -> {
+            if (!currentRoom.isPlayerTurn(userName)) {
+                JOptionPane.showMessageDialog(this, "당신의 턴이 아닙니다!", "알림", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             drawingPanel.clear();
             sendProtocol("/clear");
             updateToolButtons(null);
@@ -222,10 +209,20 @@ public class JavaChatClientView extends JFrame {
         lblRoomInfo.setFont(new Font("맑은 고딕", Font.BOLD, 16));
         panel.add(lblRoomInfo, BorderLayout.WEST);
 
-        lblTimer = new JLabel("남은 시간: " + formatTime(remainingTime));
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
+        rightPanel.setOpaque(false);
+
+        lblCurrentTurn = new JLabel("게임 준비 중...");
+        lblCurrentTurn.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+        lblCurrentTurn.setForeground(new Color(0, 102, 204));
+        rightPanel.add(lblCurrentTurn);
+
+        lblTimer = new JLabel("남은 시간: 15초");
         lblTimer.setFont(new Font("맑은 고딕", Font.BOLD, 16));
         lblTimer.setForeground(new Color(220, 53, 69));
-        panel.add(lblTimer, BorderLayout.EAST);
+        rightPanel.add(lblTimer);
+
+        panel.add(rightPanel, BorderLayout.EAST);
 
         return panel;
     }
@@ -259,12 +256,12 @@ public class JavaChatClientView extends JFrame {
     private JPanel createPlayerPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createTitledBorder("플레이어 (" +
-                currentRoom.getCurrentPlayers() + "/" + currentRoom.getMaxPlayers() + ")"));
+
+        java.util.List<String> players = currentRoom.getPlayers();
+        panel.setBorder(BorderFactory.createTitledBorder("플레이어 (" + players.size() + "/4)"));
         panel.setPreferredSize(new Dimension(200, 0));
 
         playerLabels = new JLabel[4];
-        java.util.List<String> players = currentRoom.getPlayers();
 
         for (int i = 0; i < 4; i++) {
             JPanel slotPanel = new JPanel(new BorderLayout());
@@ -297,7 +294,6 @@ public class JavaChatClientView extends JFrame {
         return panel;
     }
 
-    // [수정됨] 하단 패널 및 게임 시작 버튼 로직
     private JPanel createBottomPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         panel.setOpaque(false);
@@ -310,32 +306,36 @@ public class JavaChatClientView extends JFrame {
         btnStartGame.setFocusPainted(false);
 
         // 초기 버튼 상태 설정
-        if (isHost) {
-            if (currentRoom.getCurrentPlayers() < 4) {
-                btnStartGame.setEnabled(false);
-                btnStartGame.setText("4명이 모여야 시작 가능");
-            } else {
-                btnStartGame.setEnabled(true);
-                btnStartGame.setText("게임 시작");
-            }
-        } else {
-            // 방장이 아니면 무조건 비활성화
-            btnStartGame.setEnabled(false);
-            btnStartGame.setText("방장이 게임을 시작합니다");
-        }
+        updateStartButtonState();
 
         btnStartGame.addActionListener(e -> startGame());
-
         panel.add(btnStartGame);
 
         return panel;
     }
 
+    private void updateStartButtonState() {
+        List<String> players = currentRoom.getPlayers();
+
+        if (isHost) {
+            if (players.size() < 4) {
+                btnStartGame.setEnabled(false);
+                btnStartGame.setText("4명이 모여야 시작 가능 (" + players.size() + "/4)");
+                btnStartGame.setBackground(Color.GRAY);
+            } else {
+                btnStartGame.setEnabled(true);
+                btnStartGame.setText("게임 시작");
+                btnStartGame.setBackground(new Color(40, 167, 69));
+            }
+        } else {
+            btnStartGame.setEnabled(false);
+            btnStartGame.setText("방장이 게임을 시작합니다");
+            btnStartGame.setBackground(Color.GRAY);
+        }
+    }
+
     private void disconnect() {
         try {
-            if (gameTimer != null) {
-                gameTimer.stop();
-            }
             if (dos != null) {
                 sendProtocol("/leaveRoom");
                 dos.close();
@@ -351,6 +351,13 @@ public class JavaChatClientView extends JFrame {
         String msg = txtInput.getText().trim();
         if (msg.isEmpty()) return;
 
+        // 게임 중이고 자신의 턴이 아니면 차단
+        if (currentRoom.isGameRunning() && !currentRoom.isPlayerTurn(userName)) {
+            appendText("[시스템] 당신의 턴이 아닙니다!");
+            txtInput.setText("");
+            return;
+        }
+
         sendProtocol(userName + ": " + msg);
         txtInput.setText("");
     }
@@ -365,12 +372,11 @@ public class JavaChatClientView extends JFrame {
     }
 
     private void startGame() {
-        // 클라이언트 측에서도 한 번 더 검사
         if (!isHost) {
             JOptionPane.showMessageDialog(this, "방장만 게임을 시작할 수 있습니다.", "알림", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        if (currentRoom.getCurrentPlayers() < 4) {
+        if (currentRoom.getPlayers().size() < 4) {
             JOptionPane.showMessageDialog(this, "4명이 모여야 게임을 시작할 수 있습니다.", "알림", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -378,25 +384,28 @@ public class JavaChatClientView extends JFrame {
         sendProtocol("/gameStart");
     }
 
-    private void startTimer() {
-        if (gameTimer != null && gameTimer.isRunning()) return;
+    private void updateTurnInfo(int turnIndex, int round, String currentPlayer, int remainingSeconds) {
+        boolean isMyTurn = currentPlayer.equals(userName);
 
-        gameTimer = new Timer(1000, e -> {
-            remainingTime--;
-            lblTimer.setText("남은 시간: " + formatTime(remainingTime));
+        String turnText = String.format("라운드 %d/4 - %s의 턴 (%d/4명)",
+                round, currentPlayer, turnIndex + 1);
 
-            if (remainingTime <= 0) {
-                gameTimer.stop();
-                appendText("===== 시간 종료! =====");
-            }
-        });
-        gameTimer.start();
-    }
+        lblCurrentTurn.setText(turnText);
+        lblCurrentTurn.setForeground(isMyTurn ? new Color(255, 100, 0) : new Color(0, 102, 204));
 
-    private String formatTime(int seconds) {
-        int minutes = seconds / 60;
-        int secs = seconds % 60;
-        return String.format("%02d:%02d", minutes, secs);
+        lblTimer.setText("남은 시간: " + remainingSeconds + "초");
+
+        // 턴 제어 - 자신의 턴이 아니면 모든 입력 차단
+        boolean canInteract = isMyTurn;
+        drawingPanel.setEnabled(canInteract);
+        txtInput.setEnabled(canInteract);
+        btnSend.setEnabled(canInteract);
+        btnColorPicker.setEnabled(canInteract);
+        btnEraserTool.setEnabled(canInteract);
+
+        if (isMyTurn) {
+            appendText("[시스템] ⭐ 당신의 턴입니다! 15초 동안 그려주세요!");
+        }
     }
 
     private void appendText(String msg) {
@@ -404,12 +413,8 @@ public class JavaChatClientView extends JFrame {
         textArea.setCaretPosition(textArea.getText().length());
     }
 
-    // [중요 수정] 플레이어 입장/퇴장 시 버튼 상태 업데이트 로직
     private void updatePlayerList(java.util.List<String> players) {
         SwingUtilities.invokeLater(() -> {
-            // 불필요한 데이터 조작 코드를 삭제하고, UI 갱신에만 집중합니다.
-
-            // 1. UI 리스트 갱신
             for (int i = 0; i < 4; i++) {
                 if (i < players.size()) {
                     String playerName = players.get(i);
@@ -428,24 +433,18 @@ public class JavaChatClientView extends JFrame {
             playerPanel.setBorder(BorderFactory.createTitledBorder(
                     "플레이어 (" + players.size() + "/" + currentRoom.getMaxPlayers() + ")"));
 
-            // 2. 방장 여부 및 인원수에 따른 버튼 상태 제어
-            if (isHost) {
-                if (players.size() >= 4) {
-                    btnStartGame.setEnabled(true);
-                    btnStartGame.setText("게임 시작");
-                    btnStartGame.setBackground(new Color(40, 167, 69));
-                } else {
-                    btnStartGame.setEnabled(false);
-                    btnStartGame.setText("4명이 모여야 시작 가능 (" + players.size() + "/4)");
-                    btnStartGame.setBackground(Color.GRAY);
-                }
-            } else {
-                btnStartGame.setEnabled(false);
-                btnStartGame.setText("방장이 게임을 시작합니다");
-                btnStartGame.setBackground(Color.GRAY);
-            }
+            updateStartButtonState();
         });
     }
+
+    private void openVotingUI() {
+        SwingUtilities.invokeLater(() -> {
+            List<String> players = currentRoom.getPlayers();
+            new VotingUI(userName, players, dos, serverIp, serverPort);
+            dispose(); // 게임 창 닫기
+        });
+    }
+
     class ListenNetwork extends Thread {
         public void run() {
             while (true) {
@@ -455,22 +454,34 @@ public class JavaChatClientView extends JFrame {
                     if (msg.startsWith("/gameStart")) {
                         SwingUtilities.invokeLater(() -> {
                             appendText("===== 게임이 시작되었습니다! =====");
-                            startTimer();
                             btnStartGame.setEnabled(false);
                             btnStartGame.setText("게임 진행 중");
+                            btnStartGame.setBackground(Color.GRAY);
                         });
                     }
-                    // [여기 수정] 플레이어 입장 처리 로직
+                    // 게임 상태 업데이트 처리
+                    else if (msg.startsWith("/gameState|")) {
+                        String[] parts = msg.substring(11).split("\\|");
+                        int turnIndex = Integer.parseInt(parts[0]);
+                        int round = Integer.parseInt(parts[1]);
+                        String currentPlayer = parts[2];
+                        int remainingSeconds = Integer.parseInt(parts[3]);
+
+                        SwingUtilities.invokeLater(() -> {
+                            updateTurnInfo(turnIndex, round, currentPlayer, remainingSeconds);
+                        });
+                    }
+                    // 게임 종료 - 투표 UI로 이동
+                    else if (msg.startsWith("/gameEnded")) {
+                        SwingUtilities.invokeLater(() -> {
+                            appendText("===== 게임이 종료되었습니다! 투표를 시작합니다. =====");
+                            openVotingUI();
+                        });
+                    }
                     else if (msg.startsWith("/playerJoined ")) {
                         String newPlayer = msg.substring(14);
-
-                        // 1. 일단 무조건 추가 시도 (중복 체크는 GameRoom 내부에서 처리됨)
                         currentRoom.addPlayer(newPlayer);
-
-                        // 2. 로그 출력
                         appendText("[입장] " + newPlayer + "님이 입장했습니다.");
-
-                        // 3. UI 갱신 (반드시 현재 룸의 최신 리스트를 넘겨야 함)
                         updatePlayerList(currentRoom.getPlayers());
                     }
                     else if (msg.startsWith("/playerLeft ")) {
@@ -485,9 +496,6 @@ public class JavaChatClientView extends JFrame {
                     else if (msg.startsWith("/clear")) {
                         drawingPanel.clear();
                     }
-                    else if (msg.startsWith("/loginOK")) {
-                        // pass
-                    }
                     else {
                         appendText(msg);
                     }
@@ -499,13 +507,11 @@ public class JavaChatClientView extends JFrame {
         }
     }
 
-    /**
-     * DrawingPanel 클래스 정의
-     */
     class DrawingPanel extends JPanel {
         private Image screenImage;
         private Graphics2D screenGraphic;
         private int prevX, prevY;
+        private boolean isEnabled = true;
 
         public DrawingPanel() {
             setBackground(Color.WHITE);
@@ -514,6 +520,11 @@ public class JavaChatClientView extends JFrame {
             MyMouseListener mm = new MyMouseListener();
             addMouseListener(mm);
             addMouseMotionListener(mm);
+        }
+
+        @Override
+        public void setEnabled(boolean enabled) {
+            this.isEnabled = enabled;
         }
 
         @Override
@@ -545,12 +556,12 @@ public class JavaChatClientView extends JFrame {
                 int r = Integer.parseInt(parts[5]);
                 int g = Integer.parseInt(parts[6]);
                 int b = Integer.parseInt(parts[7]);
+                int width = Integer.parseInt(parts[8]);
 
                 screenGraphic.setColor(new Color(r, g, b));
-                screenGraphic.setStroke(new BasicStroke(2));
+                screenGraphic.setStroke(new BasicStroke(width));
                 screenGraphic.drawLine(x1, y1, x2, y2);
                 repaint();
-
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -566,18 +577,21 @@ public class JavaChatClientView extends JFrame {
         class MyMouseListener extends MouseAdapter {
             @Override
             public void mousePressed(MouseEvent e) {
+                if (!isEnabled || !currentRoom.isPlayerTurn(userName)) return;
                 prevX = e.getX();
                 prevY = e.getY();
             }
 
             @Override
             public void mouseDragged(MouseEvent e) {
+                if (!isEnabled || !currentRoom.isPlayerTurn(userName)) return;
+
                 checkImageBuffer();
                 int currX = e.getX();
                 int currY = e.getY();
 
                 screenGraphic.setColor(currentColor);
-                screenGraphic.setStroke(new BasicStroke(strokeWidth)); //굵기 적용
+                screenGraphic.setStroke(new BasicStroke(strokeWidth));
                 screenGraphic.drawLine(prevX, prevY, currX, currY);
                 repaint();
 

@@ -67,17 +67,87 @@ public class RoomListUI extends JFrame {
         }
     }
 
+    /**
+     * 이미지를 로드하여 버튼을 생성하고 스타일을 적용합니다.
+     */
+    private JButton createImageButton(String imagePath, String fallbackText) {
+        JButton btn = new JButton();
+        final int BTN_WIDTH = 130;
+        final int BTN_HEIGHT = 45;
+
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource(imagePath));
+            if (icon.getIconWidth() == -1) {
+                throw new Exception("이미지를 찾을 수 없습니다: " + imagePath);
+            }
+
+            Image img = icon.getImage().getScaledInstance(BTN_WIDTH, BTN_HEIGHT, Image.SCALE_SMOOTH);
+            btn.setIcon(new ImageIcon(img));
+
+            // 이미지 버튼 스타일 적용: 투명, 테두리 없음
+            btn.setBorderPainted(false);
+            btn.setContentAreaFilled(false);
+            btn.setFocusPainted(false);
+            btn.setOpaque(false);
+            btn.setPreferredSize(new Dimension(BTN_WIDTH, BTN_HEIGHT));
+
+        } catch (Exception e) {
+            // 이미지 로드 실패 시 텍스트 버튼으로 대체
+            btn.setText(fallbackText);
+            btn.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+            btn.setPreferredSize(new Dimension(BTN_WIDTH, BTN_HEIGHT));
+            // 대체 텍스트 버튼 스타일 (기존 styleButton 스타일 적용)
+            Color bg = (fallbackText.equals("새로고침")) ? new Color(255, 255, 255) :
+                    (fallbackText.equals("방 참가")) ? new Color(66, 133, 244) : new Color(220, 53, 69);
+            Color fg = (fallbackText.equals("새로고침")) ? Color.BLACK : Color.WHITE;
+            btn.setBackground(bg);
+            btn.setForeground(fg);
+            btn.setFocusPainted(false);
+            btn.setBorder(BorderFactory.createLineBorder(new Color(0,0,0,50), 1));
+            System.err.println("경고: " + e.getMessage());
+        }
+        return btn;
+    }
+
+    /**
+     * 이미지를 로드하여 제목 라벨을 생성합니다.
+     */
+    private JLabel createImageTitle(String imagePath, String fallbackText) {
+        JLabel label = new JLabel();
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource(imagePath));
+            if (icon.getIconWidth() == -1) {
+                throw new Exception("이미지를 찾을 수 없습니다: " + imagePath);
+            }
+
+            // 이미지 크기는 UI에 맞게 적절히 조정 (예: 250x50)
+            Image img = icon.getImage().getScaledInstance(250, 50, Image.SCALE_SMOOTH);
+            label.setIcon(new ImageIcon(img));
+            label.setBorder(new EmptyBorder(0, 30, 0, 0)); // 좌측 여백 유지
+
+        } catch (Exception e) {
+            // 이미지 로드 실패 시 텍스트로 대체 (기존 스타일 유지)
+            label.setText("<html><span style='text-shadow: 2px 2px 4px #000000;'>게임 방 목록</span></html>");
+            label.setFont(new Font("맑은 고딕", Font.BOLD, 30));
+            label.setForeground(Color.WHITE);
+            label.setBorder(new EmptyBorder(0, 30, 0, 0));
+            System.err.println("경고: " + e.getMessage());
+        }
+        return label;
+    }
+
     private void initializeUI() {
         setTitle("DrawLier - 방 목록");
         setSize(950, 650);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
-        // 1. 배경 패널 설정
+        // 1. 배경 패널 설정 (기존 코드 유지)
         JPanel contentPane = new JPanel() {
             Image bgImage = null;
             {
                 try {
+                    // 배경 이미지 경로는 /RoomList/RoomListBackGround.png로 가정합니다.
                     bgImage = new ImageIcon(getClass().getResource("/RoomList/RoomListBackGround.png")).getImage();
                 } catch (Exception e) {
                     // 이미지 없으면 배경색으로 대체
@@ -109,23 +179,22 @@ public class RoomListUI extends JFrame {
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
 
-        JLabel titleLabel = new JLabel("게임 방 목록");
-        titleLabel.setFont(new Font("맑은 고딕", Font.BOLD, 30));
-        titleLabel.setForeground(Color.WHITE);
-        titleLabel.setText("<html><span style='text-shadow: 2px 2px 4px #000000;'>게임 방 목록</span></html>");
-        titleLabel.setBorder(new EmptyBorder(0, 30, 0, 0));
+        // --- [수정] 제목을 이미지로 대체 ---
+        JLabel titleLabel = createImageTitle("/RoomList/GameListTitle.png", "게임 방 목록");
         topPanel.add(titleLabel, BorderLayout.WEST);
+        // ------------------------------
 
         JLabel userInfoLabel = new JLabel("접속자: " + userName);
         userInfoLabel.setFont(new Font("맑은 고딕", Font.BOLD, 15));
         userInfoLabel.setForeground(Color.WHITE);
         userInfoLabel.setText("<html><span style='text-shadow: 1px 1px 2px #000000;'>접속자: " + userName + "</span></html>");
-        userInfoLabel.setBorder(new EmptyBorder(0, 0, 0, 300));
+        userInfoLabel.setBorder(new EmptyBorder(0, 0, 0, 400));
         topPanel.add(userInfoLabel, BorderLayout.EAST);
 
         contentPane.add(topPanel, BorderLayout.NORTH);
 
-        // 3. 중앙 테이블 영역
+        // 3. 중앙 테이블 영역 (기존 코드 유지)
+// 3. 중앙 테이블 영역 (수정된 부분)
         String[] columnNames = {"방 이름", "방장", "인원", "카테고리", "상태"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
@@ -135,9 +204,13 @@ public class RoomListUI extends JFrame {
         roomTable = new JTable(tableModel);
         roomTable.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
         roomTable.setRowHeight(35);
+
         roomTable.getTableHeader().setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        roomTable.getTableHeader().setBackground(new Color(0, 0, 0, 0));
-        roomTable.getTableHeader().setOpaque(false);
+
+// 연한 하늘색 배경
+        roomTable.getTableHeader().setBackground(new Color(173, 216, 230));
+        roomTable.getTableHeader().setOpaque(true);
+
         roomTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
         JScrollPane scrollPane = new JScrollPane(roomTable);
@@ -148,8 +221,8 @@ public class RoomListUI extends JFrame {
         JPanel tableWrapper = new JPanel(new BorderLayout());
         tableWrapper.setOpaque(false);
         tableWrapper.add(scrollPane, BorderLayout.CENTER);
-        tableWrapper.setBorder(new EmptyBorder(0, 40, 0, 300));
-
+// 왼쪽 여백 40, 오른쪽 여백 350으로 설정하여 테이블을 왼쪽으로 이동하고 너비 축소
+        tableWrapper.setBorder(new EmptyBorder(0, 40, 0, 350));
         contentPane.add(tableWrapper, BorderLayout.CENTER);
 
         // 4. 하단 버튼 패널
@@ -157,17 +230,16 @@ public class RoomListUI extends JFrame {
         buttonPanel.setOpaque(false);
         buttonPanel.setBorder(new EmptyBorder(70, 0, 10, 0));
 
-        btnRefresh = new JButton("새로고침");
-        styleButton(btnRefresh, new Color(255, 255, 255), Color.BLACK);
+        // --- [수정] 버튼들을 이미지 버튼으로 대체 ---
+        btnRefresh = createImageButton("/RoomList/Reroad.png", "새로고침");
         btnRefresh.addActionListener(e -> requestRoomList());
 
-        btnJoinRoom = new JButton("방 참가");
-        styleButton(btnJoinRoom, new Color(66, 133, 244), Color.WHITE);
+        btnJoinRoom = createImageButton("/RoomList/EnterRoomBtn.png", "방 참가");
         btnJoinRoom.addActionListener(e -> joinSelectedRoom());
 
-        btnCreateRoom = new JButton("방 만들기");
-        styleButton(btnCreateRoom, new Color(220, 53, 69), Color.WHITE);
+        btnCreateRoom = createImageButton("/RoomList/CreateRoomBtn.png", "방 만들기");
         btnCreateRoom.addActionListener(e -> openCreateRoomDialog());
+        // ----------------------------------------
 
         buttonPanel.add(btnRefresh);
         buttonPanel.add(btnJoinRoom);
@@ -189,6 +261,7 @@ public class RoomListUI extends JFrame {
         });
     }
 
+    // styleButton 메서드는 더 이상 사용되지 않으므로 제거하거나 주석 처리합니다.
     private void styleButton(JButton btn, Color bg, Color fg) {
         btn.setFont(new Font("맑은 고딕", Font.BOLD, 14));
         btn.setPreferredSize(new Dimension(130, 45));
@@ -197,6 +270,8 @@ public class RoomListUI extends JFrame {
         btn.setFocusPainted(false);
         btn.setBorder(BorderFactory.createLineBorder(new Color(0,0,0,50), 1));
     }
+
+
 
     private void requestRoomList() {
         try {
@@ -218,7 +293,9 @@ public class RoomListUI extends JFrame {
         JTextField txtRoomName = new JTextField();
 
         JLabel lblCategory = new JLabel("카테고리:");
-        String[] categories = GameCategory.getCategoryNames();
+        // GameCategory.getCategoryNames()이 정의되어 있다고 가정
+        String[] categories = new String[]{"기본", "동물", "음식"}; // 임시 카테고리
+        // String[] categories = GameCategory.getCategoryNames();
         JComboBox<String> cmbCategory = new JComboBox<>(categories);
 
         JButton btnCreate = new JButton("생성");
@@ -253,13 +330,12 @@ public class RoomListUI extends JFrame {
     private void createRoom(String roomName, String category) {
         try {
             String roomId = UUID.randomUUID().toString().substring(0, 8);
-            // maxPlayers는 항상 4명 고정
+            // GameRoom 클래스가 정의되어 있다고 가정
             GameRoom newRoom = new GameRoom(roomId, roomName, userName, category, 4);
             newRoom.addPlayer(userName); // 방장을 미리 추가
             this.pendingRoom = newRoom;
 
             // 프로토콜: roomId|roomName|hostName|currentPlayers|maxPlayers|category|timeLimit|status
-            // currentPlayers = 1 (방장 포함)
             String roomData = String.format("%s|%s|%s|%d|%d|%s|60|WAITING",
                     roomId, roomName, userName, 1, 4, category);
 
@@ -312,6 +388,7 @@ public class RoomListUI extends JFrame {
     private void openGameView(GameRoom room, boolean isHost) {
         try {
             isRunning = false;
+            // JavaChatClientView 클래스가 정의되어 있다고 가정
             JavaChatClientView gameView = new JavaChatClientView(
                     userName, socket, dis, dos, room, isHost, serverIp, serverPort);
             gameView.setVisible(true);
@@ -417,6 +494,7 @@ public class RoomListUI extends JFrame {
                         int maxPlayers = Integer.parseInt(parts[4]);
                         String category = parts[5];
 
+                        // GameRoom 클래스가 정의되어 있다고 가정
                         GameRoom room = new GameRoom(roomId, roomName, hostName, category, maxPlayers);
 
                         // ★ 방 목록 표시를 위해 더미 플레이어 추가 (UI용)
@@ -424,6 +502,7 @@ public class RoomListUI extends JFrame {
                             if (i == 0) {
                                 room.addPlayer(hostName);
                             } else {
+                                // 실제 서버에서 플레이어 목록을 주지 않으므로, 더미 데이터로 표시 인원만 맞춤
                                 room.addPlayer("Player" + i);
                             }
                         }

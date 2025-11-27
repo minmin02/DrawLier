@@ -9,7 +9,9 @@ import java.net.Socket;
 import java.util.List;
 
 /**
- * 게임 클라이언트 뷰 - 턴 기반 시스템 강화
+ * 게임 클라이언트 뷰 - 수정됨
+ * 중요 수정사항: 게임 종료 시 ListenNetwork 스레드를 즉시 break하여
+ * VotingUI가 입력 스트림을 독점할 수 있도록 수정
  */
 public class JavaChatClientView extends JFrame {
 
@@ -45,10 +47,10 @@ public class JavaChatClientView extends JFrame {
     private Color currentColor = Color.BLACK;
     private int strokeWidth = 2;
     private final Color DRAWING_BG_COLOR = Color.WHITE;
+    private boolean isRunning = true;
 
     private boolean isLiar;
     private String myKeyword;
-    private String actualKeyword;
 
 
     public JavaChatClientView(String userName, Socket socket, DataInputStream dis,
@@ -446,6 +448,7 @@ public class JavaChatClientView extends JFrame {
     private void openVotingUI() {
         SwingUtilities.invokeLater(() -> {
             List<String> players = currentRoom.getPlayers();
+            // 주의: 여기서 isRunning=false는 이미 늦음. 스레드 내부에서 처리해야 함.
             new VotingUI(userName, players, dos, dis, currentRoom.getRoomId(), serverIp, serverPort);
             dispose();
         });
@@ -453,7 +456,7 @@ public class JavaChatClientView extends JFrame {
 
     class ListenNetwork extends Thread {
         public void run() {
-            while (true) {
+            while (isRunning) {
                 try {
                     String msg = dis.readUTF();
 
@@ -477,7 +480,6 @@ public class JavaChatClientView extends JFrame {
                                 } else if (role.equals("CITIZEN")) {
                                     isLiar = false;
                                     myKeyword = info;
-                                    actualKeyword = info;
                                     JOptionPane.showMessageDialog(JavaChatClientView.this,
                                             "✅ 당신은 시민입니다! ✅\n\n" +
                                                     "키워드: " + info + "\n\n" +
@@ -504,11 +506,20 @@ public class JavaChatClientView extends JFrame {
                             updateTurnInfo(turnIndex, round, currentPlayer, remainingSeconds);
                         });
                     }
+                    // ★★★ 여기가 가장 중요 수정 포인트 ★★★
                     else if (msg.startsWith("/gameEnded")) {
+                        System.out.println("[Client] 게임 종료 수신 - 투표 화면으로 전환");
+                        isRunning = false; // 루프 조건 해제
+
+                        // UI 전환 예약
                         SwingUtilities.invokeLater(() -> {
                             appendText("===== 게임이 종료되었습니다! 투표를 시작합니다. =====");
                             openVotingUI();
                         });
+
+                        // ★핵심★: 여기서 즉시 break를 걸어야
+                        // 이 스레드가 다음 메시지(/voteResult)를 훔쳐가지 않습니다.
+                        break;
                     }
                     else if (msg.startsWith("/playerJoined ")) {
                         String newPlayer = msg.substring(14);
@@ -532,10 +543,13 @@ public class JavaChatClientView extends JFrame {
                         appendText(msg);
                     }
                 } catch (IOException e) {
-                    appendText("서버와의 연결이 끊어졌습니다.");
+                    if(isRunning){
+                        appendText("서버와의 연결이 끊어졌습니다.");
+                    }
                     break;
                 }
             }
+            System.out.println("[Client] ListenNetwork 스레드 종료");
         }
     }
 

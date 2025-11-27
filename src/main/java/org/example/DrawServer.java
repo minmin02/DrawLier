@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * DrawServer - 게임 서버
- * 여러 방 동시 관리, 투표 및 결과 처리
+ * 수정사항: 라이어 투표 적발 시 불필요한 중복 메시지 전송 로직 제거
  */
 public class DrawServer extends JFrame {
 
@@ -430,8 +430,6 @@ public class DrawServer extends JFrame {
                                 String voteResult = "/voteResult " + mostVoted + "|" + isLiar;
                                 WriteToRoom(currentRoomId, voteResult);
 
-                                // 로그 추가
-                                AppendText("[투표 결과 전송] " + voteResult + " -> 방 " + currentRoomId);
 
                                 if (!isLiar) {
                                     // 라이어가 아닌 사람이 뽑힘 -> 라이어 승리
@@ -449,6 +447,11 @@ public class DrawServer extends JFrame {
                                             e.printStackTrace();
                                         }
                                     }).start();
+                                }
+                                else { // 라이어가 투표에서 뽑힌 경우
+                                    // 수정: 여기서 별도의 메시지를 보내지 않음!
+                                    // 클라이언트가 /voteResult를 받고 스스로 판단하여 화면을 전환함.
+                                    AppendText("[진행] 라이어(" + groom.getLiarName() + ") 정답 입력 대기 중...");
                                 }
                             }
                         }

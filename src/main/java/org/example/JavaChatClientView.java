@@ -10,10 +10,6 @@ import java.util.List;
 
 /**
  * 게임 클라이언트 뷰 - 턴 기반 시스템 강화
- * - 4명 플레이어 대기
- * - 15초 턴 타이머
- * - 턴이 아닐 때 그리기/채팅 차단
- * - 게임 종료 후 투표 UI로 전환
  */
 public class JavaChatClientView extends JFrame {
 
@@ -21,7 +17,7 @@ public class JavaChatClientView extends JFrame {
     private JPanel contentPane;
     private JTextField txtInput;
     private JTextArea textArea;
-    private JButton btnClearAll;  // ★ 추가
+    private JButton btnClearAll;
 
     private DrawingPanel drawingPanel;
 
@@ -40,6 +36,8 @@ public class JavaChatClientView extends JFrame {
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
+    private String serverIp;
+    private String serverPort;
 
     private JButton btnColorPicker;
     private JButton btnEraserTool;
@@ -48,19 +46,21 @@ public class JavaChatClientView extends JFrame {
     private int strokeWidth = 2;
     private final Color DRAWING_BG_COLOR = Color.WHITE;
 
-    private boolean isLiar;           // 내가 라이어인지 여부
-    private String myKeyword;         // 내 키워드 (시민이면 실제 키워드, 라이어면 카테고리)
-    private String actualKeyword;     // 실제 정답 키워드 (투표 후 정답 확인용)
+    private boolean isLiar;
+    private String myKeyword;
+    private String actualKeyword;
 
 
     public JavaChatClientView(String userName, Socket socket, DataInputStream dis,
-                              DataOutputStream dos, GameRoom room, boolean isHost) {
+                              DataOutputStream dos, GameRoom room, boolean isHost, String serverIp, String serverPort) {
         this.userName = userName;
         this.socket = socket;
         this.dis = dis;
         this.dos = dos;
         this.currentRoom = room;
         this.isHost = isHost;
+        this.serverIp = serverIp;
+        this.serverPort = serverPort;
 
         initializeUI();
         new ListenNetwork().start();
@@ -185,7 +185,6 @@ public class JavaChatClientView extends JFrame {
             updateToolButtons(btnEraserTool);
         });
 
-        // ★ 주의: JButton을 빼고 btnClearAll만 사용
         btnClearAll = new JButton("전체 지우기");
         btnClearAll.addActionListener(e -> {
             if (!drawingPanel.isEnabled()) {
@@ -312,7 +311,6 @@ public class JavaChatClientView extends JFrame {
         btnStartGame.setForeground(Color.WHITE);
         btnStartGame.setFocusPainted(false);
 
-        // 초기 버튼 상태 설정
         updateStartButtonState();
 
         btnStartGame.addActionListener(e -> startGame());
@@ -358,7 +356,6 @@ public class JavaChatClientView extends JFrame {
         String msg = txtInput.getText().trim();
         if (msg.isEmpty()) return;
 
-        // 게임 중이고 자신의 턴이 아니면 차단
         if (currentRoom.isGameRunning() && !currentRoom.isPlayerTurn(userName)) {
             appendText("[시스템] 당신의 턴이 아닙니다!");
             txtInput.setText("");
@@ -388,7 +385,6 @@ public class JavaChatClientView extends JFrame {
             return;
         }
 
-        // ⭐ 방 생성 시 이미 선택한 카테고리를 사용
         String selectedCategory = currentRoom.getCategory();
         sendProtocol("/gameStart " + selectedCategory);
     }
@@ -404,13 +400,11 @@ public class JavaChatClientView extends JFrame {
 
         lblTimer.setText("남은 시간: " + remainingSeconds + "초");
 
-        // 턴 제어 - 자신의 턴이 아니면 모든 입력 차단
         boolean canInteract = isMyTurn;
         drawingPanel.setEnabled(canInteract);
         txtInput.setEnabled(canInteract);
         btnSend.setEnabled(canInteract);
 
-        // 도구 버튼들도 활성화/비활성화
         if (btnColorPicker != null) btnColorPicker.setEnabled(canInteract);
         if (btnEraserTool != null) btnEraserTool.setEnabled(canInteract);
         if (btnClearAll != null) btnClearAll.setEnabled(canInteract);
@@ -452,8 +446,8 @@ public class JavaChatClientView extends JFrame {
     private void openVotingUI() {
         SwingUtilities.invokeLater(() -> {
             List<String> players = currentRoom.getPlayers();
-            new VotingUI(userName, players, dos);
-            dispose(); // 게임 창 닫기
+            new VotingUI(userName, players, dos, dis, currentRoom.getRoomId(), serverIp, serverPort);
+            dispose();
         });
     }
 
@@ -464,12 +458,10 @@ public class JavaChatClientView extends JFrame {
                     String msg = dis.readUTF();
 
                     if (msg.startsWith("/gameStart ")) {
-                        // "/gameStart ROLE|INFO" 형식
-                        // 예: "/gameStart LIAR|직업" 또는 "/gameStart CITIZEN|의사"
                         String[] parts = msg.substring(11).split("\\|");
                         if (parts.length >= 2) {
-                            String role = parts[0];  // "LIAR" 또는 "CITIZEN"
-                            String info = parts[1];  // 라이어면 카테고리, 시민이면 키워드
+                            String role = parts[0];
+                            String info = parts[1];
 
                             SwingUtilities.invokeLater(() -> {
                                 if (role.equals("LIAR")) {
@@ -484,7 +476,7 @@ public class JavaChatClientView extends JFrame {
                                             JOptionPane.WARNING_MESSAGE);
                                 } else if (role.equals("CITIZEN")) {
                                     isLiar = false;
-                                    myKeyword = info;  // 실제 키워드를 알고 있음
+                                    myKeyword = info;
                                     actualKeyword = info;
                                     JOptionPane.showMessageDialog(JavaChatClientView.this,
                                             "✅ 당신은 시민입니다! ✅\n\n" +
@@ -501,7 +493,6 @@ public class JavaChatClientView extends JFrame {
                             });
                         }
                     }
-                    // 게임 상태 업데이트 처리
                     else if (msg.startsWith("/gameState|")) {
                         String[] parts = msg.substring(11).split("\\|");
                         int turnIndex = Integer.parseInt(parts[0]);
@@ -513,7 +504,6 @@ public class JavaChatClientView extends JFrame {
                             updateTurnInfo(turnIndex, round, currentPlayer, remainingSeconds);
                         });
                     }
-                    // 게임 종료 - 투표 UI로 이동
                     else if (msg.startsWith("/gameEnded")) {
                         SwingUtilities.invokeLater(() -> {
                             appendText("===== 게임이 종료되었습니다! 투표를 시작합니다. =====");
@@ -567,7 +557,6 @@ public class JavaChatClientView extends JFrame {
         @Override
         public void setEnabled(boolean enabled) {
             this.isEnabled = enabled;
-            // ★ 추가: 시각적 피드백
             setCursor(enabled ? Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR)
                     : Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
         }
@@ -622,9 +611,8 @@ public class JavaChatClientView extends JFrame {
         class MyMouseListener extends MouseAdapter {
             @Override
             public void mousePressed(MouseEvent e) {
-                // ★ 핵심 수정: isEnabled 체크 추가
                 if (!isEnabled) {
-                    return;  // 비활성화 상태면 아무것도 안 함
+                    return;
                 }
 
                 checkImageBuffer();
@@ -634,9 +622,8 @@ public class JavaChatClientView extends JFrame {
 
             @Override
             public void mouseDragged(MouseEvent e) {
-                // ★ 핵심 수정: isEnabled 체크 추가
                 if (!isEnabled) {
-                    return;  // 비활성화 상태면 아무것도 안 함
+                    return;
                 }
 
                 checkImageBuffer();

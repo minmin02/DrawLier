@@ -1,16 +1,13 @@
 package org.example;
 
 import javax.swing.Timer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 /**
  * 턴 기반 게임룸 관리 클래스
  * - 4명의 플레이어
  * - 각 플레이어당 15초씩 4라운드
+ * - 투표 시스템 추가
  */
 public class GameRoom {
     private String roomId;
@@ -27,14 +24,18 @@ public class GameRoom {
     private GameEventListener eventListener;
 
     // 게임 역할 관련 필드
-    private String selectedCategory;      // 선택된 대분류
-    private String selectedKeyword;       // 선택된 소분류 (키워드)
-    private String liarName;              // 라이어로 지정된 플레이어
-    private Map<String, Boolean> playerRoles; // 플레이어별 역할 (true: 라이어, false: 일반)
+    private String selectedCategory;
+    private String selectedKeyword;
+    private String liarName;
+    private Map<String, Boolean> playerRoles;
+
+    // 투표 관련 필드
+    private Map<String, String> votes; // 투표자 -> 피투표자
+    private boolean votingPhase = false;
 
     // 게임 설정
-    private static final int TURN_TIME_SECONDS = 15;
-    private static final int MAX_ROUNDS = 4;
+    private static final int TURN_TIME_SECONDS = 5;
+    private static final int MAX_ROUNDS = 1;
     private static final int REQUIRED_PLAYERS = 4;
 
     private int remainingSeconds;
@@ -56,7 +57,8 @@ public class GameRoom {
         this.currentRound = 1;
         this.isGameRunning = false;
         this.remainingSeconds = TURN_TIME_SECONDS;
-        this.playerRoles = new HashMap<>();  // ⭐ 추가
+        this.playerRoles = new HashMap<>();
+        this.votes = new HashMap<>();
     }
 
     public void addPlayer(String playerName) {
@@ -73,23 +75,6 @@ public class GameRoom {
         return players.size() == REQUIRED_PLAYERS && !isGameRunning;
     }
 
-    // ⭐ 기존 메서드 (호환성 유지)
-    public void startGame(GameEventListener listener) {
-        if (!canStartGame()) {
-            return;
-        }
-
-        this.eventListener = listener;
-        this.isGameRunning = true;
-        this.currentTurnIndex = 0;
-        this.currentRound = 1;
-        this.remainingSeconds = TURN_TIME_SECONDS;
-
-        startTurnTimer();
-        notifyTurnChange();
-    }
-
-    // ⭐ 새로운 메서드: 카테고리 기반 게임 시작
     public void startGameWithCategory(String selectedCategory, GameEventListener listener) {
         if (!canStartGame()) {
             return;
@@ -106,7 +91,7 @@ public class GameRoom {
             return;
         }
 
-        // 2. 라이어 랜덤 선택 (4명 중 1명)
+        // 2. 라이어 랜덤 선택
         Random random = new Random();
         int liarIndex = random.nextInt(players.size());
         this.liarName = players.get(liarIndex);
@@ -119,7 +104,7 @@ public class GameRoom {
             playerRoles.put(player, isLiar);
         }
 
-        // 4. 기존 게임 시작 로직 실행
+        // 4. 게임 시작
         this.eventListener = listener;
         this.isGameRunning = true;
         this.currentTurnIndex = 0;
@@ -159,12 +144,10 @@ public class GameRoom {
 
         currentTurnIndex++;
 
-        // 모든 플레이어가 턴을 마쳤으면 다음 라운드로
         if (currentTurnIndex >= players.size()) {
             currentTurnIndex = 0;
             currentRound++;
 
-            // 4라운드가 끝나면 게임 종료
             if (currentRound > MAX_ROUNDS) {
                 endGame();
                 return;
@@ -185,6 +168,8 @@ public class GameRoom {
 
     private void endGame() {
         isGameRunning = false;
+        votingPhase = true;
+
         if (turnTimer != null) {
             turnTimer.stop();
             turnTimer = null;
@@ -199,6 +184,58 @@ public class GameRoom {
         endGame();
     }
 
+    // 투표 관련 메서드
+    public void addVote(String voter, String votedPlayer) {
+        if (votingPhase && players.contains(voter) && players.contains(votedPlayer)) {
+            votes.put(voter, votedPlayer);
+        }
+    }
+
+    public boolean hasAllVoted() {
+        // 모든 플레이어가 투표했는지 확인
+        return votes.size() == players.size();
+    }
+
+    public String getMostVotedPlayer() {
+        if (votes.isEmpty()) {
+            return null;
+        }
+
+        Map<String, Integer> voteCount = new HashMap<>();
+        for (String votedPlayer : votes.values()) {
+            voteCount.put(votedPlayer, voteCount.getOrDefault(votedPlayer, 0) + 1);
+        }
+
+        // 최다 득표자 찾기
+        String mostVoted = null;
+        int maxVotes = 0;
+        for (Map.Entry<String, Integer> entry : voteCount.entrySet()) {
+            if (entry.getValue() > maxVotes) {
+                maxVotes = entry.getValue();
+                mostVoted = entry.getKey();
+            }
+        }
+
+        return mostVoted;
+    }
+
+    public boolean isMostVotedLiar() {
+        String mostVoted = getMostVotedPlayer();
+        return mostVoted != null && mostVoted.equals(liarName);
+    }
+
+    public boolean checkLiarAnswer(String answer) {
+        if (answer == null || selectedKeyword == null) {
+            return false;
+        }
+
+        // 대소문자 구분 없이, 공백 제거 후 비교
+        String normalizedAnswer = answer.trim().toLowerCase();
+        String normalizedKeyword = selectedKeyword.trim().toLowerCase();
+
+        return normalizedAnswer.equals(normalizedKeyword);
+    }
+
     // 현재 턴인 플레이어인지 확인
     public boolean isPlayerTurn(String playerName) {
         if (!isGameRunning || players.isEmpty()) {
@@ -207,13 +244,10 @@ public class GameRoom {
         return players.get(currentTurnIndex).equals(playerName);
     }
 
-    // ⭐ 새로운 메서드들
-    // 플레이어가 라이어인지 확인
     public boolean isLiar(String playerName) {
         return playerRoles.getOrDefault(playerName, false);
     }
 
-    // 플레이어에게 보여줄 정보 가져오기 (LIAR|카테고리 or CITIZEN|키워드)
     public String getPlayerInfo(String playerName) {
         if (isLiar(playerName)) {
             return "LIAR|" + selectedCategory;
@@ -222,7 +256,6 @@ public class GameRoom {
         }
     }
 
-    // 게임 상태를 문자열로 반환 (클라이언트에게 전송용)
     public String getGameStateString() {
         if (players.isEmpty()) {
             return "/gameState|0|1|NONE|15";
@@ -248,12 +281,10 @@ public class GameRoom {
         if (players.isEmpty()) return "";
         return players.get(currentTurnIndex);
     }
-
-    // ⭐ 새로운 Getter들
     public String getSelectedCategory() { return selectedCategory; }
     public String getSelectedKeyword() { return selectedKeyword; }
     public String getLiarName() { return liarName; }
-    public Map<String, Boolean> getPlayerRoles() {
-        return new HashMap<>(playerRoles);
-    }
+    public Map<String, Boolean> getPlayerRoles() { return new HashMap<>(playerRoles); }
+    public boolean isVotingPhase() { return votingPhase; }
+    public Map<String, String> getVotes() { return new HashMap<>(votes); }
 }

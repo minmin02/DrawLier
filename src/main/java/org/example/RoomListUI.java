@@ -78,7 +78,7 @@ public class RoomListUI extends JFrame {
             Image bgImage = null;
             {
                 try {
-                    bgImage = new ImageIcon(getClass().getResource("/22.jpg")).getImage();
+                    bgImage = new ImageIcon(getClass().getResource("/RoomList/RoomListBackGround.png")).getImage();
                 } catch (Exception e) {
                     // 이미지 없으면 배경색으로 대체
                 }

@@ -1,6 +1,8 @@
 package org.example;
 
 import javax.swing.*;
+import javax.swing.border.AbstractBorder;
+import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -9,11 +11,57 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 
 /**
+ * 둥근 모서리를 가진 커스텀 Border 클래스
+ * JTextField 디자인 개선을 위해 추가됨
+ */
+class RoundBorder extends AbstractBorder {
+    private Color color;
+    private int thickness;
+    private int radius;
+    private Insets insets;
+
+    public RoundBorder(Color color, int thickness, int radius) {
+        this.color = color;
+        this.thickness = thickness;
+        this.radius = radius;
+        this.insets = new Insets(thickness, thickness, thickness, thickness);
+    }
+
+    @Override
+    public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setColor(color);
+        g2.setStroke(new BasicStroke(thickness));
+
+        // 둥근 사각형 그리기
+        g2.drawRoundRect(x + thickness / 2, y + thickness / 2,
+                width - thickness, height - thickness,
+                radius, radius);
+        g2.dispose();
+    }
+
+    @Override
+    public Insets getBorderInsets(Component c) {
+        return insets;
+    }
+
+    @Override
+    public Insets getBorderInsets(Component c, Insets insets) {
+        insets.left = insets.top = insets.right = insets.bottom = thickness;
+        return insets;
+    }
+}
+
+
+/**
  * 라이어 게임 클라이언트 로그인 UI 클래스
  * 로그인 후 방 목록 화면으로 이동
  */
 public class LiarGameClientLoginUI extends JFrame {
 
+    // (BackgroundPanel 클래스는 이 파일에 없으므로, 이미 정의되어 있다고 가정합니다.)
+    // class BackgroundPanel extends JPanel { ... }
     private BackgroundPanel contentPane;
     private JTextField txtIpAddress;
     private JTextField txtNickname;
@@ -25,6 +73,14 @@ public class LiarGameClientLoginUI extends JFrame {
         private String placeholder;
         private boolean isEmpty;
 
+        // 리팩토링: 둥근 모서리 반경 설정
+        private final int CORNER_RADIUS = 10;
+
+        // 리팩토링: 기본 테두리와 포커스 테두리 인셋 설정
+        private final Border DEFAULT_PADDING = BorderFactory.createEmptyBorder(8, 15, 8, 15);
+        private final Border FOCUSED_PADDING = BorderFactory.createEmptyBorder(7, 14, 7, 14);
+
+
         public PlaceholderTextField(String placeholder) {
             this.placeholder = placeholder;
             this.isEmpty = true;
@@ -33,18 +89,20 @@ public class LiarGameClientLoginUI extends JFrame {
             addFocusListener(this);
 
             // 가로 크기 줄이기
-            setColumns(20); // 15에서 더 작게 조절 (원하는 크기로)
-            setMaximumSize(new Dimension(400, 40)); // 최대 너비 제한
-            setPreferredSize(new Dimension(350, 40)); // 선호 크기 설정
+            setColumns(20);
+            setMaximumSize(new Dimension(400, 40));
+            setPreferredSize(new Dimension(350, 40)); // 텍스트 필드 크기 유지
 
             setFont(new Font("맑은 고딕", Font.PLAIN, 14));
-            setBackground(new Color(255, 255, 255, 200));
+
+            // 리팩토링: 배경색을 조금 더 투명도를 줄여서 깔끔하게 설정
+            setBackground(new Color(255, 255, 255, 220));
             setOpaque(true);
             setCaretColor(Color.BLACK);
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(new Color(180, 180, 180), 1, true),
-                    BorderFactory.createEmptyBorder(8, 15, 8, 15)
-            ));
+
+            // --- [리팩토링 1] 둥근 모서리 및 깔끔한 테두리 적용 ---
+            Border outerBorder = new RoundBorder(new Color(220, 220, 220), 1, CORNER_RADIUS);
+            setBorder(BorderFactory.createCompoundBorder(outerBorder, DEFAULT_PADDING));
         }
 
         @Override
@@ -54,10 +112,11 @@ public class LiarGameClientLoginUI extends JFrame {
                 setForeground(Color.BLACK);
                 isEmpty = false;
             }
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(new Color(66, 133, 244), 2, true),
-                    BorderFactory.createEmptyBorder(7, 14, 7, 14)
-            ));
+
+            // --- [리팩토링 2] 포커스 시 강조 효과 ---
+            // 포커스 시 테두리: 눈에 띄는 파란색 (66, 133, 244), 2px 두께
+            Border focusedBorder = new RoundBorder(new Color(66, 133, 244), 2, CORNER_RADIUS);
+            setBorder(BorderFactory.createCompoundBorder(focusedBorder, FOCUSED_PADDING));
         }
 
         @Override
@@ -67,10 +126,10 @@ public class LiarGameClientLoginUI extends JFrame {
                 setForeground(new Color(150, 150, 150));
                 isEmpty = true;
             }
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(new Color(180, 180, 180), 1, true),
-                    BorderFactory.createEmptyBorder(8, 15, 8, 15)
-            ));
+
+            // --- [리팩토링 3] 포커스 상실 시 기본 스타일 복구 ---
+            Border outerBorder = new RoundBorder(new Color(220, 220, 220), 1, CORNER_RADIUS);
+            setBorder(BorderFactory.createCompoundBorder(outerBorder, DEFAULT_PADDING));
         }
 
         @Override
@@ -80,6 +139,48 @@ public class LiarGameClientLoginUI extends JFrame {
             }
             return super.getText();
         }
+    }
+
+    /**
+     * 이미지를 로드하여 JLabel에 설정하는 헬퍼 메서드
+     * 이미지를 텍스트 필드와 유사한 높이(45px)로 스케일 다운하고 비율을 유지합니다.
+     */
+    private JLabel createImageLabel(String imagePath, String fallbackText) {
+        JLabel label = new JLabel();
+
+        // 목표 이미지 크기 (가로 134px, 높이 45px)
+        final int TARGET_WIDTH = 134;
+        final int TARGET_HEIGHT = 45;
+
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource(imagePath));
+
+            // 이미지가 제대로 로드되었는지 확인
+            if (icon.getIconWidth() == -1) {
+                throw new Exception("이미지를 찾을 수 없습니다: " + imagePath);
+            }
+
+            // 이미지 크기를 목표 크기로 스케일 조정 (비율 유지)
+            Image img = icon.getImage().getScaledInstance(TARGET_WIDTH, TARGET_HEIGHT, Image.SCALE_SMOOTH);
+            label.setIcon(new ImageIcon(img));
+
+            // 레이블의 크기를 이미지 크기로 고정하여 늘어짐 방지
+            Dimension fixedSize = new Dimension(TARGET_WIDTH, TARGET_HEIGHT);
+            label.setPreferredSize(fixedSize);
+            label.setMaximumSize(fixedSize);
+            label.setMinimumSize(fixedSize);
+
+        } catch (Exception e) {
+            // 이미지 로드 실패 시 텍스트로 대체
+            label.setText(fallbackText);
+            label.setFont(new Font("맑은 고딕", Font.BOLD, 16));
+            label.setForeground(Color.BLACK);
+            System.err.println("경고: " + e.getMessage());
+        }
+
+        // 레이블을 중앙 정렬하도록 설정
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        return label;
     }
 
     public static void main(String[] args) {
@@ -97,48 +198,61 @@ public class LiarGameClientLoginUI extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setTitle("DrawLier - Liar Game Client");
 
-        // [수정 1] 가로 너비를 400 -> 600으로 변경
         setBounds(100, 100, 1100, 900);
 
-        contentPane = new BackgroundPanel("UserStart.jpg");
-        contentPane.setBorder(new EmptyBorder(30, 80, 30, 20)); // 너비가 넓어졌으므로 좌우 여백을 조금 더 줌
+        contentPane = new BackgroundPanel("loginBackground.png");
+        contentPane.setBorder(new EmptyBorder(30, 80, 30, 20));
         setContentPane(contentPane);
         contentPane.setLayout(new BorderLayout(0, 20));
-
 
 
         // 입력 필드 패널
         JPanel inputPanel = new JPanel();
         inputPanel.setOpaque(false);
-        inputPanel.setLayout(new GridLayout(6, 1, 0, 8)); // 세로 간격을 12 -> 8로 줄임
-        inputPanel.setBorder(new EmptyBorder(300, 150, 50, 150)); // 상단 여백을 늘려서 아래로 내림 (20->300)
+        // GridBagLayout을 사용하여 크기 제어 및 중앙 정렬
+        inputPanel.setLayout(new GridBagLayout());
+        inputPanel.setBorder(new EmptyBorder(200, 100, 50, 100)); // 상단 여백 200px
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL; // 가로로 늘어나지 않게 설정
+        gbc.insets = new Insets(0, 0, 10, 0); // 컴포넌트 간의 아래쪽 여백 (10px로 축소)
+        // 텍스트 필드와 이미지가 모두 중앙에 위치하도록 weightx를 0으로 설정하고 anchor를 CENTER로 지정
+        gbc.weightx = 0;
+        gbc.anchor = GridBagConstraints.CENTER;
 
-        JLabel lblIp = new JLabel("Server IP");
-        lblIp.setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        lblIp.setForeground(Color.BLACK);
-        inputPanel.add(lblIp);
+
+        // --- Server IP ---
+        JLabel lblIp = createImageLabel("/loginUI/ServerIp.png", "Server IP");
+        gbc.gridx = 0; // 0열
+        gbc.gridy = 0; // 0행
+        inputPanel.add(lblIp, gbc);
+
         txtIpAddress = new PlaceholderTextField("Enter server IP address");
         txtIpAddress.setText("127.0.0.1");
         txtIpAddress.setForeground(Color.BLACK);
         ((PlaceholderTextField)txtIpAddress).isEmpty = false;
-        inputPanel.add(txtIpAddress);
+        gbc.gridy = 1; // 1행
+        inputPanel.add(txtIpAddress, gbc);
 
-        JLabel lblNickname = new JLabel("Nickname");
-        lblNickname.setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        lblNickname.setForeground(Color.BLACK);
-        inputPanel.add(lblNickname);
+        // --- Nickname ---
+        JLabel lblNickname = createImageLabel("/loginUI/NickName.png", "Nickname");
+        gbc.gridy = 2; // 2행
+        inputPanel.add(lblNickname, gbc);
+
         txtNickname = new PlaceholderTextField("Enter your nickname");
-        inputPanel.add(txtNickname);
+        gbc.gridy = 3; // 3행
+        inputPanel.add(txtNickname, gbc);
 
-        JLabel lblPort = new JLabel("Port");
-        lblPort.setFont(new Font("맑은 고딕", Font.BOLD, 13));
-        lblPort.setForeground(Color.BLACK);
-        inputPanel.add(lblPort);
+        // --- Port ---
+        JLabel lblPort = createImageLabel("/loginUI/Port.png", "Port");
+        gbc.gridy = 4; // 4행
+        inputPanel.add(lblPort, gbc);
+
         txtPort = new PlaceholderTextField("Enter port number");
         txtPort.setText("30000");
         txtPort.setForeground(Color.BLACK);
         ((PlaceholderTextField)txtPort).isEmpty = false;
-        inputPanel.add(txtPort);
+        gbc.gridy = 5; // 5행
+        inputPanel.add(txtPort, gbc);
 
         contentPane.add(inputPanel, BorderLayout.CENTER);
 
@@ -148,18 +262,19 @@ public class LiarGameClientLoginUI extends JFrame {
         buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
         buttonPanel.setBorder(new EmptyBorder(10, 10, 0, 10));
 
-        // [수정 2] 버튼을 이미지로 교체
+        // 버튼 이미지 로딩 (기존 코드 유지)
         btnEnterGame = new JButton(); // 텍스트 제거
 
         try {
             // 이미지 로드 및 크기 조절
-            ImageIcon icon = new ImageIcon(getClass().getResource("/EnterButton.png"));
+            ImageIcon icon = new ImageIcon(getClass().getResource("/loginUI/StartButton.png"));
 
             // 이미지가 제대로 로드되었는지 확인
             if (icon.getIconWidth() == -1) {
                 throw new Exception("이미지를 찾을 수 없습니다.");
             }
 
+            // 버튼 크기는 220x60 유지
             Image img = icon.getImage().getScaledInstance(220, 60, Image.SCALE_SMOOTH);
             btnEnterGame.setIcon(new ImageIcon(img));
 
@@ -178,10 +293,6 @@ public class LiarGameClientLoginUI extends JFrame {
             System.err.println("EnterButton.png 이미지를 찾을 수 없습니다: " + e.getMessage());
         }
         btnEnterGame.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        // 이미지 버튼이므로 기존의 배경색 변경 마우스 리스너는 제거하거나,
-        // 필요하다면 이미지를 바꾸는 로직(롤오버 이미지 등)으로 변경해야 함.
-        // 여기서는 단순화를 위해 기존 색상 변경 리스너 제거.
 
         buttonPanel.add(btnEnterGame);
 
@@ -209,9 +320,11 @@ public class LiarGameClientLoginUI extends JFrame {
 
                 try {
                     // 방 목록 화면으로 이동
-                    RoomListUI roomListUI = new RoomListUI(nickname, ip_addr, port_no);
-                    roomListUI.setVisible(true);
-                    dispose();
+                     RoomListUI roomListUI = new RoomListUI(nickname, ip_addr, port_no);
+                     roomListUI.setVisible(true);
+                     dispose();
+
+
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "연결 오류: " + ex.getMessage(), "연결 오류", JOptionPane.ERROR_MESSAGE);
                     ex.printStackTrace();

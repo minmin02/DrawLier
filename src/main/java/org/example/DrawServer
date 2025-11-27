@@ -7,7 +7,6 @@ import java.util.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.util.List;
 
 /**
  * DrawServer - 게임 서버
@@ -426,29 +425,18 @@ public class DrawServer extends JFrame {
 
                                 AppendText("[투표 결과] 최다 득표: " + mostVoted + " (라이어 여부: " + isLiar + ")");
 
-                                // 투표 결과 전송 (모든 플레이어에게)
+                                // 투표 결과 전송
                                 String voteResult = "/voteResult " + mostVoted + "|" + isLiar;
                                 WriteToRoom(currentRoomId, voteResult);
 
-                                // 로그 추가
-                                AppendText("[투표 결과 전송] " + voteResult + " -> 방 " + currentRoomId);
-
                                 if (!isLiar) {
                                     // 라이어가 아닌 사람이 뽑힘 -> 라이어 승리
-                                    // 0.5초 대기 후 최종 결과 전송
-                                    new Thread(() -> {
-                                        try {
-                                            Thread.sleep(500);
-                                            String finalResult = "/finalResult LIAR|" + groom.getLiarName() +
-                                                    "|" + mostVoted + "님이 억울하게 투표되었습니다! 실제 라이어는 " +
-                                                    groom.getLiarName() + "님이었습니다.\n정답 키워드: " + groom.getSelectedKeyword();
+                                    String finalResult = "/finalResult LIAR|" + groom.getLiarName() +
+                                            "|" + mostVoted + "님이 억울하게 투표되었습니다! 실제 라이어는 " +
+                                            groom.getLiarName() + "님이었습니다.\n정답 키워드: " + groom.getSelectedKeyword();
 
-                                            WriteToRoom(currentRoomId, finalResult);
-                                            AppendText("[게임 종료] 라이어 승리 - " + currentRoomId);
-                                        } catch (InterruptedException e) {
-                                            e.printStackTrace();
-                                        }
-                                    }).start();
+                                    WriteToRoom(currentRoomId, finalResult);
+                                    AppendText("[게임 종료] 라이어 승리 - " + currentRoomId);
                                 }
                             }
                         }

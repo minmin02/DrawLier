@@ -313,7 +313,7 @@ public class RoomListUI extends JFrame {
         try {
             isRunning = false;
             JavaChatClientView gameView = new JavaChatClientView(
-                    userName, socket, dis, dos, room, isHost);
+                    userName, socket, dis, dos, room, isHost, serverIp, serverPort);
             gameView.setVisible(true);
             this.dispose();
         } catch (Exception ex) {

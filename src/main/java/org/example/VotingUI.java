@@ -1,39 +1,48 @@
 package org.example;
 
-
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.List;
 
 /**
  * 투표 UI - 게임 종료 후 라이어를 찾는 투표 화면
+ * 모든 인원이 투표 완료 시 결과 표시
  */
 public class VotingUI extends JFrame {
     private String userName;
     private List<String> players;
     private DataOutputStream dos;
+    private DataInputStream dis;
+    private String roomId;
+    private String serverIp;
+    private String serverPort;
+
     private JLabel lblTitle;
     private JPanel votingPanel;
     private JButton[] voteButtons;
-    // 해시맵 -> 리스트
     private String selectedPlayer;
+    private boolean hasVoted = false;
 
-    public VotingUI(String userName, List<String> players, DataOutputStream dos) {
+    public VotingUI(String userName, List<String> players, DataOutputStream dos, DataInputStream dis, String roomId, String serverIP, String serverPort) {
         this.userName = userName;
         this.players = players;
         this.dos = dos;
+        this.dis = dis;
+        this.roomId = roomId;
+        this.serverIp = serverIP;
+        this.serverPort = serverPort;
 
         initializeUI();
+        new ListenVoteResult().start();
     }
 
     private void initializeUI() {
         setTitle("DrawLier - 투표 시간!");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setBounds(100, 100, 600, 500);
 
         JPanel contentPane = new JPanel();
@@ -63,7 +72,6 @@ public class VotingUI extends JFrame {
             String player = players.get(i);
             JButton btnVote = new JButton();
 
-            // 버튼 스타일링
             btnVote.setLayout(new BorderLayout());
             btnVote.setBackground(Color.WHITE);
             btnVote.setFocusPainted(false);
@@ -94,13 +102,12 @@ public class VotingUI extends JFrame {
 
             btnVote.add(nameLabel, BorderLayout.SOUTH);
 
-            // 버튼 호버 효과
             final JButton finalBtn = btnVote;
             final String finalPlayer = player;
 
             btnVote.addMouseListener(new java.awt.event.MouseAdapter() {
                 public void mouseEntered(java.awt.event.MouseEvent evt) {
-                    if (finalBtn.isEnabled()) {
+                    if (finalBtn.isEnabled() && !hasVoted) {
                         finalBtn.setBackground(new Color(230, 240, 255));
                         finalBtn.setBorder(BorderFactory.createCompoundBorder(
                                 BorderFactory.createLineBorder(new Color(100, 150, 255), 3),
@@ -110,7 +117,7 @@ public class VotingUI extends JFrame {
                 }
 
                 public void mouseExited(java.awt.event.MouseEvent evt) {
-                    if (finalBtn.isEnabled() && !finalPlayer.equals(selectedPlayer)) {
+                    if (finalBtn.isEnabled() && !hasVoted && !finalPlayer.equals(selectedPlayer)) {
                         finalBtn.setBackground(Color.WHITE);
                         finalBtn.setBorder(BorderFactory.createCompoundBorder(
                                 BorderFactory.createLineBorder(new Color(200, 200, 200), 2),
@@ -120,9 +127,8 @@ public class VotingUI extends JFrame {
                 }
             });
 
-            btnVote.addActionListener(new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
+            btnVote.addActionListener(e -> {
+                if (!hasVoted) {
                     selectPlayer(finalPlayer, finalBtn);
                 }
             });
@@ -146,12 +152,7 @@ public class VotingUI extends JFrame {
         btnConfirm.setFocusPainted(false);
         btnConfirm.setBorder(BorderFactory.createEmptyBorder());
 
-        btnConfirm.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                submitVote();
-            }
-        });
+        btnConfirm.addActionListener(e -> submitVote());
 
         bottomPanel.add(btnConfirm);
         contentPane.add(bottomPanel, BorderLayout.SOUTH);
@@ -161,6 +162,8 @@ public class VotingUI extends JFrame {
     }
 
     private void selectPlayer(String player, JButton button) {
+        if (hasVoted) return;
+
         // 이전 선택 초기화
         for (int i = 0; i < voteButtons.length; i++) {
             if (voteButtons[i].isEnabled()) {
@@ -182,6 +185,14 @@ public class VotingUI extends JFrame {
     }
 
     private void submitVote() {
+        if (hasVoted) {
+            JOptionPane.showMessageDialog(this,
+                    "이미 투표하셨습니다!",
+                    "알림",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         if (selectedPlayer == null) {
             JOptionPane.showMessageDialog(this,
                     "투표할 플레이어를 선택해주세요!",
@@ -191,21 +202,16 @@ public class VotingUI extends JFrame {
         }
 
         try {
-            // 서버로 투표 정보 전송
             dos.writeUTF("/vote " + selectedPlayer);
+            hasVoted = true;
 
-            //메시지 처리
-            JOptionPane.showMessageDialog(this,
-                    selectedPlayer + "님에게 투표하였습니다!",
-                    "투표 완료",
-                    JOptionPane.INFORMATION_MESSAGE);
+            // 버튼 비활성화
+            for (JButton btn : voteButtons) {
+                btn.setEnabled(false);
+            }
 
-
-            // 승리 패널 팝업
-            // 투표 완료 후 창 닫기
-            //panel 이동
-            // 죽여
-            dispose();
+            lblTitle.setText("투표 완료! 결과를 기다리는 중...");
+            lblTitle.setForeground(new Color(100, 100, 100));
 
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this,
@@ -213,6 +219,72 @@ public class VotingUI extends JFrame {
                     "오류",
                     JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
+        }
+    }
+
+    class ListenVoteResult extends Thread {
+        public void run() {
+            try {
+                while (true) {
+                    String msg = dis.readUTF();
+                    System.out.println("[VotingUI] 수신한 메시지: " + msg);
+
+                    if (msg.startsWith("/voteResult ")) {
+                        // "/voteResult 최다득표자|라이어여부"
+                        String[] parts = msg.substring(12).split("\\|");
+                        String mostVoted = parts[0];
+                        boolean isLiar = parts[1].equals("true");
+
+                        System.out.println("[VotingUI] 투표 결과 - 최다득표: " + mostVoted + ", 라이어: " + isLiar);
+
+                        SwingUtilities.invokeLater(() -> {
+                            if (isLiar) {
+                                // 라이어가 최다 득표 -> 라이어에게 답 입력 기회
+                                System.out.println("[VotingUI] 라이어 적발! userName=" + userName + ", mostVoted=" + mostVoted);
+                                if (userName.equals(mostVoted)) {
+                                    System.out.println("[VotingUI] InsertAnswerUI 열기");
+                                    new InsertAnswerUI(userName, dos, dis, roomId, serverIp, serverPort);
+                                    dispose();
+                                } else {
+                                    System.out.println("[VotingUI] 다른 플레이어 - 대기 중");
+                                    lblTitle.setText("라이어가 적발되었습니다! 정답 맞추기 진행 중...");
+                                    lblTitle.setForeground(new Color(220, 53, 69));
+                                }
+                            } else {
+                                // 라이어가 아닌 사람이 최다 득표 -> 라이어 승리
+                                System.out.println("[VotingUI] 시민이 억울하게 투표됨 - ResultUI 열기");
+                                new ResultUI(userName, false, mostVoted + "님이 억울하게 투표되었습니다!", dos, roomId, serverIp, serverPort);
+                                dispose();
+                            }
+                        });
+
+                        // 라이어가 아닌 사람이 뽑힌 경우에만 종료
+                        // 라이어가 뽑힌 경우는 finalResult를 계속 대기
+                        if (!isLiar) {
+                            break;
+                        }
+                    }
+                    else if (msg.startsWith("/finalResult ")) {
+                        // 라이어의 정답 맞추기 결과
+                        // "/finalResult 승리팀|라이어이름|메시지"
+                        System.out.println("[VotingUI] 최종 결과 수신");
+                        String[] parts = msg.substring(13).split("\\|", 3);
+                        boolean citizenWin = parts[0].equals("CITIZEN");
+                        String liarName = parts[1];
+                        String message = parts[2];
+
+                        SwingUtilities.invokeLater(() -> {
+                            System.out.println("[VotingUI] ResultUI 열기 - 시민승리: " + citizenWin);
+                            new ResultUI(userName, citizenWin, message, dos, roomId, serverIp, serverPort);
+                            dispose();
+                        });
+                        break;
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("투표 결과 수신 오류");
+                e.printStackTrace();
+            }
         }
     }
 }

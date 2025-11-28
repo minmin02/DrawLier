@@ -138,10 +138,15 @@ public class DrawServer extends JFrame {
             try {
                 int currentCount = Integer.parseInt(parts[3]);
                 int newCount = currentCount + change;
-                parts[3] = String.valueOf(newCount);
-                String newRoomInfo = String.join("|", parts);
-                rooms.put(roomId, newRoomInfo);
-                broadcastRoomListUpdate();
+
+                if(newCount <= 0){ //인원이 0 이하면 방 삭제
+                    removeRoom(roomId);
+                }else {
+                    parts[3] = String.valueOf(newCount);
+                    String newRoomInfo = String.join("|", parts);
+                    rooms.put(roomId, newRoomInfo);
+                    broadcastRoomListUpdate();
+                }
             } catch (Exception e) {
                 AppendText("방 인원 업데이트 오류: " + e.getMessage());
             }
@@ -158,6 +163,21 @@ public class DrawServer extends JFrame {
             if (user.currentRoomId == null) {
                 user.WriteOne(roomList.toString());
             }
+        }
+    }
+    private synchronized void removeRoom(String roomId){
+        if(rooms.containsKey(roomId)){
+            String roomName = "";
+            GameRoom gr = gameRooms.get(roomId);
+            if(gr != null) roomName = gr.getRoomName();
+
+            //맵에서 방 데이터 삭제
+            rooms.remove(roomId);
+            roomOwners.remove(roomId);
+            gameRooms.remove(roomId);
+
+            AppendText("[방 삭제] " + roomName + " (" + roomId + ") ");
+            broadcastRoomListUpdate(); //변경된 방 목록 전체 브로드캐스트
         }
     }
 

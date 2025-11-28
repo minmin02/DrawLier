@@ -208,6 +208,8 @@ public class DrawServer extends JFrame {
         String userName = "";
         private String currentRoomId = null;
 
+        private boolean isClosed = false; //중복 종료 방지 플래그
+
         public UserService(Socket clientSocket) {
             this.clientSocket = clientSocket;
             try {
@@ -249,26 +251,30 @@ public class DrawServer extends JFrame {
                 }
             }
         }
-
-        private void closeConnection() {
-            try {
-                if (currentRoomId != null) {
+        //동기화 및 종료 플래그 체크
+        private synchronized void closeConnection(){
+            if(isClosed){ //이미 종료됐다면 중복 실행 방지
+                return;
+            }
+            isClosed = true; //종료 플래그 생성
+            try{
+                if(currentRoomId != null){
                     updateRoomCount(currentRoomId, -1);
-                    WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName);
+                    WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName); //자신 제외 알림
 
                     GameRoom groom = gameRooms.get(currentRoomId);
-                    if (groom != null) {
+                    if(groom != null){
                         groom.removePlayer(userName);
                     }
                 }
+                if(dos != null) dos.close();
+                if(dis != null) dis.close();
+                if(clientSocket != null) clientSocket.close();
 
-                if (dos != null) dos.close();
-                if (dis != null) dis.close();
-                if (clientSocket != null) clientSocket.close();
                 UserVec.removeElement(this);
                 updateClientCount();
                 AppendText("[퇴장] " + userName);
-            } catch (IOException e) {
+            }catch(IOException e){
                 e.printStackTrace();
             }
         }

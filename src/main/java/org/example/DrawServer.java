@@ -11,7 +11,10 @@ import java.util.List;
 
 /**
  * DrawServer - 게임 서버
- * 수정사항: 라이어 투표 적발 시 불필요한 중복 메시지 전송 로직 제거
+ * 수정사항:
+ * 1. 게임 종료(투표 시작) 시 방 상태 FINISH로 변경 및 목록 숨김
+ * 2. 퇴장 로그 중복 출력 방지
+ * 3. 인원 0명 시 방 자동 삭제
  */
 public class DrawServer extends JFrame {
 
@@ -131,6 +134,38 @@ public class DrawServer extends JFrame {
         });
     }
 
+    // [추가] 방 삭제 및 목록 갱신
+    private synchronized void removeRoom(String roomId) {
+        if (rooms.containsKey(roomId)) {
+            String roomName = "";
+            GameRoom gr = gameRooms.get(roomId);
+            if(gr != null) roomName = gr.getRoomName();
+
+            rooms.remove(roomId);
+            roomOwners.remove(roomId);
+            gameRooms.remove(roomId);
+
+            AppendText("[방 삭제] " + roomName + " (" + roomId + ")");
+            broadcastRoomListUpdate();
+        }
+    }
+
+    // [추가] 방 상태 변경 (FINISH 등)
+    private synchronized void setRoomStatus(String roomId, String status) {
+        String roomInfo = rooms.get(roomId);
+        if (roomInfo != null) {
+            String[] parts = roomInfo.split("\\|");
+            // parts[7]이 status라고 가정 (createRoom 시 포맷 확인 필요)
+            // roomId|roomName|hostName|current|max|category|time|status
+            if (parts.length >= 8) {
+                parts[7] = status;
+                String newRoomInfo = String.join("|", parts);
+                rooms.put(roomId, newRoomInfo);
+                broadcastRoomListUpdate();
+            }
+        }
+    }
+
     private synchronized void updateRoomCount(String roomId, int change) {
         String roomInfo = rooms.get(roomId);
         if (roomInfo != null) {
@@ -139,9 +174,9 @@ public class DrawServer extends JFrame {
                 int currentCount = Integer.parseInt(parts[3]);
                 int newCount = currentCount + change;
 
-                if(newCount <= 0){ //인원이 0 이하면 방 삭제
+                if (newCount <= 0) {
                     removeRoom(roomId);
-                }else {
+                } else {
                     parts[3] = String.valueOf(newCount);
                     String newRoomInfo = String.join("|", parts);
                     rooms.put(roomId, newRoomInfo);
@@ -153,31 +188,29 @@ public class DrawServer extends JFrame {
         }
     }
 
-    private void broadcastRoomListUpdate() {
+    // [추가] FINISH 상태인 방은 목록에서 제외
+    private String getFilteredRoomList() {
         StringBuilder roomList = new StringBuilder("/roomList ");
         for (String roomData : rooms.values()) {
+            String[] parts = roomData.split("\\|");
+            // FINISH 상태 필터링
+            if (parts.length >= 8) {
+                if ("FINISH".equals(parts[7])) {
+                    continue; // 목록에 추가하지 않음
+                }
+            }
             roomList.append(roomData).append(";;");
         }
+        return roomList.toString();
+    }
+
+    private void broadcastRoomListUpdate() {
+        String roomList = getFilteredRoomList();
 
         for (UserService user : UserVec) {
             if (user.currentRoomId == null) {
-                user.WriteOne(roomList.toString());
+                user.WriteOne(roomList);
             }
-        }
-    }
-    private synchronized void removeRoom(String roomId){
-        if(rooms.containsKey(roomId)){
-            String roomName = "";
-            GameRoom gr = gameRooms.get(roomId);
-            if(gr != null) roomName = gr.getRoomName();
-
-            //맵에서 방 데이터 삭제
-            rooms.remove(roomId);
-            roomOwners.remove(roomId);
-            gameRooms.remove(roomId);
-
-            AppendText("[방 삭제] " + roomName + " (" + roomId + ") ");
-            broadcastRoomListUpdate(); //변경된 방 목록 전체 브로드캐스트
         }
     }
 
@@ -207,8 +240,7 @@ public class DrawServer extends JFrame {
         private DataOutputStream dos;
         String userName = "";
         private String currentRoomId = null;
-
-        private boolean isClosed = false; //중복 종료 방지 플래그
+        private boolean isClosed = false; // 중복 종료 방지
 
         public UserService(Socket clientSocket) {
             this.clientSocket = clientSocket;
@@ -251,30 +283,29 @@ public class DrawServer extends JFrame {
                 }
             }
         }
-        //동기화 및 종료 플래그 체크
-        private synchronized void closeConnection(){
-            if(isClosed){ //이미 종료됐다면 중복 실행 방지
-                return;
-            }
-            isClosed = true; //종료 플래그 생성
-            try{
-                if(currentRoomId != null){
+
+        private synchronized void closeConnection() {
+            if (isClosed) return;
+            isClosed = true;
+
+            try {
+                if (currentRoomId != null) {
                     updateRoomCount(currentRoomId, -1);
-                    WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName); //자신 제외 알림
+                    WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName);
 
                     GameRoom groom = gameRooms.get(currentRoomId);
-                    if(groom != null){
+                    if (groom != null) {
                         groom.removePlayer(userName);
                     }
                 }
-                if(dos != null) dos.close();
-                if(dis != null) dis.close();
-                if(clientSocket != null) clientSocket.close();
 
+                if (dos != null) dos.close();
+                if (dis != null) dis.close();
+                if (clientSocket != null) clientSocket.close();
                 UserVec.removeElement(this);
                 updateClientCount();
                 AppendText("[퇴장] " + userName);
-            }catch(IOException e){
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
@@ -309,11 +340,9 @@ public class DrawServer extends JFrame {
                         WriteOne("/roomCreated " + roomId);
                     }
                     else if (msg.equals("/getRoomList")) {
-                        StringBuilder roomList = new StringBuilder("/roomList ");
-                        for (String roomData : rooms.values()) {
-                            roomList.append(roomData).append(";;");
-                        }
-                        WriteOne(roomList.toString());
+                        // [수정] 필터링된 목록 전송
+                        String roomList = getFilteredRoomList();
+                        WriteOne(roomList);
                     }
                     else if (msg.startsWith("/joinRoom ")) {
                         String roomId = msg.substring(10);
@@ -385,7 +414,9 @@ public class DrawServer extends JFrame {
 
                                     @Override
                                     public void onGameEnded() {
-                                        AppendText("[게임 종료] 방: " + currentRoomId);
+                                        // ★ [수정] 게임 종료(투표 시작) 시 방 상태를 FINISH로 변경
+                                        AppendText("[게임 종료] 방: " + currentRoomId + " -> 투표 진입 (목록에서 숨김)");
+                                        setRoomStatus(currentRoomId, "FINISH");
                                         WriteToRoom(currentRoomId, "/gameEnded");
                                     }
 
@@ -411,12 +442,8 @@ public class DrawServer extends JFrame {
                                     }
                                 }
 
-                                String roomInfo = rooms.get(currentRoomId);
-                                if(roomInfo != null) {
-                                    String[] roomParts = roomInfo.split("\\|");
-                                    roomParts[7] = "PLAYING";
-                                    rooms.put(currentRoomId, String.join("|", roomParts));
-                                }
+                                // 게임 시작 시 상태 PLAYING으로 변경
+                                setRoomStatus(currentRoomId, "PLAYING");
                             }
                         }
                     }
@@ -452,14 +479,10 @@ public class DrawServer extends JFrame {
 
                                 AppendText("[투표 결과] 최다 득표: " + mostVoted + " (라이어 여부: " + isLiar + ")");
 
-                                // 투표 결과 전송 (모든 플레이어에게)
                                 String voteResult = "/voteResult " + mostVoted + "|" + isLiar;
                                 WriteToRoom(currentRoomId, voteResult);
 
-
                                 if (!isLiar) {
-                                    // 라이어가 아닌 사람이 뽑힘 -> 라이어 승리
-                                    // 0.5초 대기 후 최종 결과 전송
                                     new Thread(() -> {
                                         try {
                                             Thread.sleep(500);
@@ -468,15 +491,14 @@ public class DrawServer extends JFrame {
                                                     groom.getLiarName() + "님이었습니다.\n정답 키워드: " + groom.getSelectedKeyword();
 
                                             WriteToRoom(currentRoomId, finalResult);
-                                            AppendText("[게임 종료] 라이어 승리 - " + currentRoomId);
+                                            // FINISH 상태 유지 (이미 onGameEnded에서 설정됨)
+                                            AppendText("[게임 결과] 라이어 승리 - " + currentRoomId);
                                         } catch (InterruptedException e) {
                                             e.printStackTrace();
                                         }
                                     }).start();
                                 }
-                                else { // 라이어가 투표에서 뽑힌 경우
-                                    // 수정: 여기서 별도의 메시지를 보내지 않음!
-                                    // 클라이언트가 /voteResult를 받고 스스로 판단하여 화면을 전환함.
+                                else {
                                     AppendText("[진행] 라이어(" + groom.getLiarName() + ") 정답 입력 대기 중...");
                                 }
                             }
@@ -493,18 +515,17 @@ public class DrawServer extends JFrame {
 
                             String finalResult;
                             if (correct) {
-                                // 라이어가 정답 맞춤 -> 라이어 승리
                                 finalResult = "/finalResult LIAR|" + userName +
                                         "|라이어 " + userName + "님이 정답을 맞췄습니다!\n정답: " + groom.getSelectedKeyword();
                             } else {
-                                // 라이어가 정답 못 맞춤 -> 시민 승리
                                 finalResult = "/finalResult CITIZEN|" + userName +
                                         "|라이어 " + userName + "님이 정답을 맞추지 못했습니다!\n" +
                                         "라이어의 답변: " + answer + "\n정답: " + groom.getSelectedKeyword();
                             }
 
                             WriteToRoom(currentRoomId, finalResult);
-                            AppendText("[게임 종료] " + (correct ? "라이어" : "시민") + " 승리 - " + currentRoomId);
+                            // FINISH 상태 유지 (이미 onGameEnded에서 설정됨)
+                            AppendText("[게임 결과] " + (correct ? "라이어" : "시민") + " 승리 - " + currentRoomId);
                         }
                     }
                     else {

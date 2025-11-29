@@ -20,6 +20,7 @@ public class JavaChatClientView extends JFrame {
     private JTextField txtInput;
     private JTextArea textArea;
     private JButton btnClearAll;
+    private JButton btnLeaveRoom; //방 나가기 버튼
 
     private DrawingPanel drawingPanel;
 
@@ -132,6 +133,21 @@ public class JavaChatClientView extends JFrame {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         panel.setBackground(new Color(240, 240, 240));
 
+        //방 나가기 버튼
+        btnLeaveRoom = new JButton("나가기");
+        btnLeaveRoom.setPreferredSize(new Dimension(80, 30));
+        btnLeaveRoom.setBackground(new Color(220, 53, 69));
+        btnLeaveRoom.setFocusPainted(false);
+        btnLeaveRoom.addActionListener(e -> leaveRoom());
+        panel.add(btnLeaveRoom);
+
+        //구분선
+        panel.add(Box.createRigidArea(new Dimension(10, 0)));
+        JSeparator separator = new JSeparator(SwingConstants.VERTICAL);
+        separator.setPreferredSize(new Dimension(2, 25));
+        panel.add(separator);
+        panel.add(Box.createRigidArea(new Dimension(10, 0)));
+
         String[] widths = {"1", "2", "4", "8", "12"};
         JComboBox<String> strokeSelector = new JComboBox<>(widths);
         strokeSelector.setSelectedItem("2");
@@ -147,7 +163,7 @@ public class JavaChatClientView extends JFrame {
         panel.add(strokeSelector);
 
         btnColorPicker = new JButton("색상 선택");
-        btnColorPicker.setPreferredSize(new Dimension(120, 30));
+        btnColorPicker.setPreferredSize(new Dimension(100, 30));
         btnColorPicker.setBackground(currentColor);
         btnColorPicker.setForeground(Color.WHITE);
         btnColorPicker.setOpaque(true);
@@ -203,6 +219,22 @@ public class JavaChatClientView extends JFrame {
         panel.add(btnClearAll);
 
         return panel;
+    }
+
+    //방 나가기 로직
+    private void leaveRoom() {
+        try{
+            if(dos != null){
+                dos.writeUTF("/leaveRoom");
+            }
+            isRunning = false;
+            SwingUtilities.invokeLater(() -> {
+                new RoomListUI(userName, serverIp, serverPort).setVisible(true);
+                dispose();
+            });
+        }catch(IOException ex){
+            ex.printStackTrace();
+        }
     }
 
     private JPanel createTopPanel() {

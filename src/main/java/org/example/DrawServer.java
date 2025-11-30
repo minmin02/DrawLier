@@ -31,6 +31,10 @@ public class DrawServer extends JFrame {
     private Map<String, GameRoom> gameRooms = new HashMap<>();
 
     public static void main(String[] args) {
+        // UTF-8 인코딩 강제 설정
+        System.setProperty("file.encoding", "UTF-8");
+        System.setProperty("client.encoding.override", "UTF-8");
+
         EventQueue.invokeLater(() -> {
             try {
                 DrawServer frame = new DrawServer();
@@ -105,7 +109,11 @@ public class DrawServer extends JFrame {
 
         textArea = new JTextArea();
         textArea.setEditable(false);
-        textArea.setFont(new Font("맑은 고딕", Font.PLAIN, 12));
+
+        // UTF-8 한글 지원을 위한 폰트 설정
+        Font logFont = getKoreanSupportFont(12);
+        textArea.setFont(logFont);
+
         JScrollPane scrollPane = new JScrollPane(textArea);
         logPanel.add(scrollPane, BorderLayout.CENTER);
 
@@ -117,6 +125,35 @@ public class DrawServer extends JFrame {
     public void AppendText(String str) {
         textArea.append(str + "\n");
         textArea.setCaretPosition(textArea.getText().length());
+    }
+
+    /**
+     * 한글을 지원하는 폰트를 반환합니다.
+     */
+    private Font getKoreanSupportFont(int size) {
+        String[] koreanFonts = {
+            "맑은 고딕",           // Windows
+            "Malgun Gothic",      // Windows (영문명)
+            "나눔고딕",           // 나눔 폰트
+            "NanumGothic",        // 나눔 폰트 (영문명)
+            "Apple SD Gothic Neo", // macOS
+            "Noto Sans CJK KR",   // Linux
+            "Dialog"              // Fallback
+        };
+
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        String[] availableFonts = ge.getAvailableFontFamilyNames();
+
+        for (String koreanFont : koreanFonts) {
+            for (String availableFont : availableFonts) {
+                if (availableFont.equals(koreanFont)) {
+                    return new Font(koreanFont, Font.PLAIN, size);
+                }
+            }
+        }
+
+        // Fallback
+        return new Font(Font.DIALOG, Font.PLAIN, size);
     }
 
     public UserService getUserByName(String userName) {

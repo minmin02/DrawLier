@@ -6,6 +6,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.io.*;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -671,6 +672,22 @@ public class JavaChatClientView extends JFrame {
             while (isRunning) {
                 try {
                     String msg = dis.readUTF();
+                    if(msg.startsWith("/updatePlayerList")) {
+                        String playerStr = msg.substring(18); //명령어 길이만큼
+                        String [] players = playerStr.split(",");
+
+                        //로컬 데이터 초기화 및 갱신
+                        currentRoom.getPlayers().clear();
+
+                        List<String> newPlayerList = new ArrayList<>();
+                        for(String p : players){
+                            if(!p.trim().isEmpty()){
+                                newPlayerList.add(p);
+                            }
+                        }
+                        //UI 업데이트
+                        updatePlayerList(newPlayerList);
+                    }
 
                     if (msg.startsWith("/gameStart ")) {
                         String[] parts = msg.substring(11).split("\\|");
@@ -880,6 +897,7 @@ public class JavaChatClientView extends JFrame {
                     else if (msg.startsWith("/clear")) {
                         drawingPanel.clear();
                     }
+
                     else {
                         appendText(msg);
                     }

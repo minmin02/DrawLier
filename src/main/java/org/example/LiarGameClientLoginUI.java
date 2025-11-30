@@ -184,6 +184,10 @@ public class LiarGameClientLoginUI extends JFrame {
     }
 
     public static void main(String[] args) {
+        // UTF-8 인코딩 강제 설정
+        System.setProperty("file.encoding", "UTF-8");
+        System.setProperty("client.encoding.override", "UTF-8");
+
         EventQueue.invokeLater(() -> {
             try {
                 LiarGameClientLoginUI frame = new LiarGameClientLoginUI();

@@ -4,6 +4,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.geom.RoundRectangle2D;
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
@@ -283,31 +284,183 @@ public class RoomListUI extends JFrame {
 
     private void openCreateRoomDialog() {
         JDialog dialog = new JDialog(this, "방 만들기", true);
-        dialog.setSize(400, 250);
+        dialog.setSize(543, 369);
         dialog.setLocationRelativeTo(this);
 
-        JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        // ⭐ 팝업창 둥근 모서리 설정 (OS 장식 제거 및 투명 배경)
+        dialog.setUndecorated(true);
+        dialog.setBackground(new Color(0, 0, 0, 0));
 
-        JLabel lblRoomName = new JLabel("방 이름:");
+        // 1. 이미지 배경 및 둥근 모서리를 위한 사용자 정의 JPanel 생성
+        JPanel panel = new JPanel(new GridBagLayout()) {
+            Image bgImage = null;
+            private final int CORNER_RADIUS = 30;
+
+            {
+                try {
+                    // 배경 이미지 경로: /RoomList/createRoom.png
+                    bgImage = new ImageIcon(getClass().getResource("/RoomList/createRoom.png")).getImage();
+                } catch (Exception e) {
+                    System.err.println("경고: 배경 이미지를 찾을 수 없습니다: /RoomList/createRoom.png");
+                }
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // 둥근 모서리 클리핑 영역 설정
+                g2.clip(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), CORNER_RADIUS, CORNER_RADIUS));
+
+                // 배경 이미지를 그립니다.
+                if (bgImage != null) {
+                    g2.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+                } else {
+                    g2.setColor(new Color(240, 240, 240));
+                    g2.fillRect(0, 0, getWidth(), getHeight());
+                }
+
+                g2.dispose();
+                super.paintComponent(g); // 하위 컴포넌트들을 그리기 위해 호출
+            }
+        };
+
+        panel.setOpaque(false);
+        // ⭐ 좌우 여백을 늘려 컴포넌트들을 중앙으로 배치
+        panel.setBorder(new EmptyBorder(20, 60, 20, 60));
+
+        // ---------------------------------------------------------
+        // 2. 컴포넌트 생성 (이미지 적용)
+        // ---------------------------------------------------------
+
+        // [2-1] 방 이름 라벨 (이미지 적용)
+        JLabel lblRoomName = new JLabel();
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource("/RoomList/RoomName.png"));
+            // 이미지 크기 조정 (예: 120x30)
+            Image img = icon.getImage().getScaledInstance(120, 30, Image.SCALE_SMOOTH);
+            lblRoomName.setIcon(new ImageIcon(img));
+        } catch (Exception e) {
+            lblRoomName.setText("방 이름:"); // 이미지 로드 실패 시 대체 텍스트
+            System.err.println("경고: 방 이름 이미지를 찾을 수 없습니다.");
+        }
+
         JTextField txtRoomName = new JTextField();
 
-        JLabel lblCategory = new JLabel("카테고리:");
-        // GameCategory.getCategoryNames()이 정의되어 있다고 가정
-        String[] categories = new String[]{"기본", "동물", "음식"}; // 임시 카테고리
-        // String[] categories = GameCategory.getCategoryNames();
+        // [2-2] 카테고리 라벨 (이미지 적용)
+        JLabel lblCategory = new JLabel();
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource("/RoomList/category.png"));
+            Image img = icon.getImage().getScaledInstance(120, 30, Image.SCALE_SMOOTH);
+            lblCategory.setIcon(new ImageIcon(img));
+        } catch (Exception e) {
+            lblCategory.setText("카테고리:");
+            System.err.println("경고: 카테고리 이미지를 찾을 수 없습니다.");
+        }
+
+        String[] categories = GameCategory.getCategoryNames();
         JComboBox<String> cmbCategory = new JComboBox<>(categories);
 
-        JButton btnCreate = new JButton("생성");
-        JButton btnCancel = new JButton("취소");
+        // [2-3] 생성 및 취소 버튼 (이미지 적용)
+        JButton btnCreate = new JButton();
+        JButton btnCancel = new JButton();
 
-        panel.add(lblRoomName);
-        panel.add(txtRoomName);
-        panel.add(lblCategory);
-        panel.add(cmbCategory);
-        panel.add(btnCancel);
-        panel.add(btnCreate);
+        // 버튼 크기 설정
+        Dimension buttonSize = new Dimension(120, 56);
+        btnCreate.setPreferredSize(buttonSize);
+        btnCancel.setPreferredSize(buttonSize);
 
+        // 생성 버튼 이미지 설정
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource("/RoomList/createBtn.png"));
+            Image img = icon.getImage().getScaledInstance(buttonSize.width, buttonSize.height, Image.SCALE_SMOOTH);
+            btnCreate.setIcon(new ImageIcon(img));
+
+            // 이미지 버튼 스타일 (테두리 제거, 배경 투명)
+            btnCreate.setBorderPainted(false);
+            btnCreate.setContentAreaFilled(false);
+            btnCreate.setFocusPainted(false);
+        } catch (Exception e) {
+            btnCreate.setText("생성");
+        }
+
+        // 취소 버튼 이미지 설정
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource("/RoomList/cancelBtn.png"));
+            Image img = icon.getImage().getScaledInstance(buttonSize.width, buttonSize.height, Image.SCALE_SMOOTH);
+            btnCancel.setIcon(new ImageIcon(img));
+
+            // 이미지 버튼 스타일
+            btnCancel.setBorderPainted(false);
+            btnCancel.setContentAreaFilled(false);
+            btnCancel.setFocusPainted(false);
+        } catch (Exception e) {
+            btnCancel.setText("취소");
+        }
+
+        // 기타 컴포넌트 스타일 설정
+        lblRoomName.setOpaque(false);
+        lblCategory.setOpaque(false);
+        cmbCategory.setOpaque(false);
+
+        // 입력창 크기 지정
+        Dimension inputSize = new Dimension(200, 30);
+        txtRoomName.setPreferredSize(inputSize);
+        cmbCategory.setPreferredSize(inputSize);
+
+        // ---------------------------------------------------------
+        // 3. 패널에 컴포넌트 추가 (GridBagLayout)
+        // ---------------------------------------------------------
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 5, 10, 5); // 컴포넌트 간 여백
+
+// ⭐ 위쪽 여백 추가 (컴포넌트를 아래로 이동)
+        gbc.gridx = 0; gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        gbc.weighty = 0.3; // 위쪽 빈 공간 추가
+        gbc.fill = GridBagConstraints.VERTICAL;
+        panel.add(Box.createVerticalGlue(), gbc);
+
+// --- 1행: 방 이름 ---
+        gbc.gridwidth = 1; // 원래대로 복구
+        gbc.weighty = 0; // 원래대로 복구
+        gbc.insets = new Insets(10, 5, 10, 5); // 기본 insets로 복구
+        gbc.gridx = 0; gbc.gridy = 1; gbc.anchor = GridBagConstraints.WEST; // ⭐ gridy = 1
+        gbc.weightx = 0; gbc.fill = GridBagConstraints.NONE;
+        panel.add(lblRoomName, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 1; gbc.anchor = GridBagConstraints.WEST; // ⭐ gridy = 1
+        gbc.weightx = 1.0; gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(txtRoomName, gbc);
+
+// --- 2행: 카테고리 ---
+        gbc.gridx = 0; gbc.gridy = 2; gbc.anchor = GridBagConstraints.WEST; // ⭐ gridy = 2
+        gbc.weightx = 0; gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(50, 5, 10, 5); // ⭐ 위쪽 여백 30으로 증가
+        panel.add(lblCategory, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 2; gbc.anchor = GridBagConstraints.WEST; // ⭐ gridy = 2
+        gbc.weightx = 1.0; gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(50, 5, 10, 5); // ⭐ 동일하게 적용
+        panel.add(cmbCategory, gbc);
+
+// --- 3행: 버튼 (하단 우측 배치) ---
+// 버튼 부분은 원래 insets로 복구
+        gbc.insets = new Insets(10, 5, 10, 5); // ⭐ 원래대로 복구
+        JPanel buttonContainer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
+        buttonContainer.setOpaque(false);
+        buttonContainer.add(btnCancel);
+        buttonContainer.add(btnCreate);
+
+        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2; // ⭐ gridy = 3
+        gbc.anchor = GridBagConstraints.SOUTHEAST;
+        gbc.weighty = 1.0; gbc.fill = GridBagConstraints.NONE;
+        panel.add(buttonContainer, gbc);
+
+        // ---------------------------------------------------------
+        // 4. 이벤트 리스너 및 다이얼로그 표시
+        // ---------------------------------------------------------
         btnCreate.addActionListener(e -> {
             String roomName = txtRoomName.getText().trim();
             String category = (String) cmbCategory.getSelectedItem();

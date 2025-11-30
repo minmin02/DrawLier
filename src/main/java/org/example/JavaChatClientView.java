@@ -21,6 +21,7 @@ public class JavaChatClientView extends JFrame {
     private JTextArea textArea;
     private JButton btnClearAll;
     private JButton btnLeaveRoom; //방 나가기 버튼
+    private JButton btnEmoji; //이모지 버튼
 
     private DrawingPanel drawingPanel;
 
@@ -267,27 +268,124 @@ public class JavaChatClientView extends JFrame {
         return panel;
     }
 
+
+    /**
+     * 한글과 이모지를 모두 지원하는 폰트 생성
+     * Windows의 맑은 고딕은 한글과 기본 유니코드 이모지를 모두 지원
+     */
+    private Font createKoreanFont(int size) {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        String[] availableFonts = ge.getAvailableFontFamilyNames();
+
+        // 1순위: 맑은 고딕 (한글 + 이모지 지원)
+        // Windows에서 기본 제공되며 한글과 유니코드 이모지를 모두 표시 가능
+        for (String font : availableFonts) {
+            if (font.equals("맑은 고딕") || font.equals("Malgun Gothic")) {
+                return new Font("맑은 고딕", Font.PLAIN, size);
+            }
+        }
+
+        // 2순위: Apple SD Gothic Neo (macOS 한글 폰트)
+        for (String font : availableFonts) {
+            if (font.contains("Apple SD Gothic") || font.contains("AppleSDGothicNeo")) {
+                return new Font(font, Font.PLAIN, size);
+            }
+        }
+
+        // 3순위: 나눔고딕 (한글 폰트)
+        for (String font : availableFonts) {
+            if (font.contains("나눔고딕") || font.contains("NanumGothic")) {
+                return new Font(font, Font.PLAIN, size);
+            }
+        }
+
+        // 4순위: 굴림 (Windows 기본 한글 폰트)
+        for (String font : availableFonts) {
+            if (font.equals("굴림") || font.equals("Gulim")) {
+                return new Font("굴림", Font.PLAIN, size);
+            }
+        }
+
+        // 최종 폴백: Dialog 폰트 (시스템이 자동으로 적절한 폰트 선택)
+        return new Font(Font.DIALOG, Font.PLAIN, size);
+    }
+
+    /**
+     * 이모지 표시를 위한 폰트 생성 (이모지 우선)
+     * 이모지 버튼, 이모지 선택기 등에 적용
+     */
+    private Font createEmojiFont(int size) {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        String[] availableFonts = ge.getAvailableFontFamilyNames();
+
+        // 1순위: Segoe UI Emoji (Windows 이모지 폰트)
+        for (String font : availableFonts) {
+            if (font.equals("Segoe UI Emoji")) {
+                return new Font("Segoe UI Emoji", Font.PLAIN, size);
+            }
+        }
+
+        // 2순위: Apple Color Emoji (macOS)
+        for (String font : availableFonts) {
+            if (font.equals("Apple Color Emoji")) {
+                return new Font("Apple Color Emoji", Font.PLAIN, size);
+            }
+        }
+
+        // 3순위: Noto Color Emoji (Linux)
+        for (String font : availableFonts) {
+            if (font.equals("Noto Color Emoji")) {
+                return new Font("Noto Color Emoji", Font.PLAIN, size);
+            }
+        }
+
+        // 4순위: 맑은 고딕 (일부 이모지 지원)
+        for (String font : availableFonts) {
+            if (font.equals("맑은 고딕") || font.equals("Malgun Gothic")) {
+                return new Font("맑은 고딕", Font.PLAIN, size);
+            }
+        }
+
+        // 최종 폴백: Dialog 폰트
+        return new Font(Font.DIALOG, Font.PLAIN, size);
+    }
+
     private JPanel createChatPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBorder(BorderFactory.createTitledBorder("채팅"));
 
         textArea = new JTextArea();
         textArea.setEditable(false);
-        textArea.setFont(new Font("맑은 고딕", Font.PLAIN, 12));
+        // ✅ 맑은 고딕 사용 (한글 + 이모지 모두 지원)
+        textArea.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
+
         JScrollPane scrollPane = new JScrollPane(textArea);
         panel.add(scrollPane, BorderLayout.CENTER);
 
         JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
         txtInput = new JTextField();
-        txtInput.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
+        // ✅ 맑은 고딕 사용
+        txtInput.setFont(new Font("맑은 고딕", Font.PLAIN, 14));
         txtInput.addActionListener(e -> sendMessage());
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+
+        btnEmoji = new JButton("😊");
+        // ✅ 맑은 고딕 사용
+        btnEmoji.setFont(new Font("맑은 고딕", Font.PLAIN, 16));
+        btnEmoji.setPreferredSize(new Dimension(50, 30));
+        btnEmoji.setToolTipText("이모지 선택");
+        btnEmoji.addActionListener(e -> showEmojiPicker());
 
         btnSend = new JButton("전송");
         btnSend.setFont(new Font("맑은 고딕", Font.BOLD, 12));
         btnSend.addActionListener(e -> sendMessage());
 
+        buttonPanel.add(btnEmoji);
+        buttonPanel.add(btnSend);
+
         inputPanel.add(txtInput, BorderLayout.CENTER);
-        inputPanel.add(btnSend, BorderLayout.EAST);
+        inputPanel.add(buttonPanel, BorderLayout.EAST);
         panel.add(inputPanel, BorderLayout.SOUTH);
 
         return panel;
@@ -309,6 +407,7 @@ public class JavaChatClientView extends JFrame {
             slotPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
 
             playerLabels[i] = new JLabel();
+            // ✅ 맑은 고딕 사용
             playerLabels[i].setFont(new Font("맑은 고딕", Font.BOLD, 14));
             playerLabels[i].setOpaque(true);
             playerLabels[i].setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -400,6 +499,88 @@ public class JavaChatClientView extends JFrame {
         txtInput.setText("");
     }
 
+    private void showEmojiPicker() {
+        JDialog emojiDialog = new JDialog(this, "이모티콘 선택", true);
+        emojiDialog.setSize(450, 350);
+        emojiDialog.setLocationRelativeTo(this);
+
+        JPanel emojiPanel = new JPanel(new GridLayout(8, 6, 5, 5));
+        emojiPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        // 텍스트 이모티콘 배열 (한글과 호환되는 형식)
+        String[][] emoticons = {
+                {"^_^", "웃음"},
+                {"ㅋㅋㅋ", "크크크"},
+                {"ㅎㅎㅎ", "하하하"},
+                {"ㅠㅠ", "슬픔"},
+                {"ㅜㅜ", "울음"},
+                {"^^", "미소"},
+                {"^o^", "신남"},
+                {"T_T", "눈물"},
+                {">_<", "화남"},
+                {"O_O", "놀람"},
+                {"-_-", "무표정"},
+                {"@_@", "어지러움"},
+                {"*_*", "반짝"},
+                {"♥", "하트"},
+                {"★", "별"},
+                {"♪", "음표"},
+                {"(~_~)", "졸림"},
+                {"(^3^)", "뽀뽀"},
+                {"(>_<)", "아픔"},
+                {"(=^ω^=)", "고양이"},
+                {"(╯°□°）╯", "뒤집기"},
+                {"¯\\_(ツ)_/¯", "모르겠음"},
+                {"(ಠ_ಠ)", "째려봄"},
+                {"(✿◠‿◠)", "행복"},
+                {"(づ｡◕‿‿◕｡)づ", "포옹"},
+                {"(ノ^_^)ノ", "축하"},
+                {"ヽ(°〇°)ﾉ", "당황"},
+                {"(｡♥‿♥｡)", "사랑"},
+                {"(ง'̀-'́)ง", "파이팅"},
+                {"(◕‿◕)", "귀여움"},
+                {"(⌐■_■)", "쿨함"},
+                {"(╥_╥)", "흑흑"},
+                {"(ノಠ益ಠ)ノ", "분노"},
+                {"(づ￣ ³￣)づ", "뽀뽀2"},
+                {"(•‿•)", "윙크"},
+                {"(⊙_⊙)", "응?"},
+                {"ㄱㅅ", "감사"},
+                {"ㅊㅋ", "축하"},
+                {"ㅅㄱ", "수고"},
+                {"ㄳ", "감사2"},
+                {"굿", "좋아요"},
+                {"오키", "OK"},
+                {"ㅇㅋ", "OK2"},
+                {"ㄴㄴ", "노노"},
+                {"ㅇㅇ", "응응"},
+                {"ㄹㅇ", "리얼"},
+                {"헐", "놀람2"},
+                {"대박", "대박"}
+        };
+
+        Font emoticonFont = new Font("맑은 고딕", Font.PLAIN, 16);
+
+        for (String[] emoticon : emoticons) {
+            String symbol = emoticon[0];
+            String label = emoticon[1];
+
+            JButton btnEmoticon = new JButton("<html><center>" + symbol + "<br><small>" + label + "</small></center></html>");
+            btnEmoticon.setFont(emoticonFont);
+            btnEmoticon.setFocusPainted(false);
+            btnEmoticon.setToolTipText(label);
+            btnEmoticon.addActionListener(e -> {
+                txtInput.setText(txtInput.getText() + symbol + " ");
+                emojiDialog.dispose();
+            });
+            emojiPanel.add(btnEmoticon);
+        }
+
+        JScrollPane scrollPane = new JScrollPane(emojiPanel);
+        emojiDialog.add(scrollPane);
+        emojiDialog.setVisible(true);
+    }
+
     private void sendProtocol(String msg) {
         try {
             dos.writeUTF(msg);
@@ -443,9 +624,9 @@ public class JavaChatClientView extends JFrame {
         if (btnEraserTool != null) btnEraserTool.setEnabled(canInteract);
         if (btnClearAll != null) btnClearAll.setEnabled(canInteract);
 
-        if (isMyTurn) {
-            appendText("[시스템] ⭐ 당신의 턴입니다! 15초 동안 그려주세요!");
-        }
+//        if (isMyTurn) {
+//            appendText("[시스템] ⭐ 당신의 턴입니다! 15초 동안 그려주세요!");
+//        }
     }
 
     private void appendText(String msg) {
@@ -480,7 +661,6 @@ public class JavaChatClientView extends JFrame {
     private void openVotingUI() {
         SwingUtilities.invokeLater(() -> {
             List<String> players = currentRoom.getPlayers();
-            // 주의: 여기서 isRunning=false는 이미 늦음. 스레드 내부에서 처리해야 함.
             new VotingUI(userName, players, dos, dis, currentRoom.getRoomId(), serverIp, serverPort);
             dispose();
         });
@@ -502,22 +682,155 @@ public class JavaChatClientView extends JFrame {
                                 if (role.equals("LIAR")) {
                                     isLiar = true;
                                     myKeyword = info;
-                                    JOptionPane.showMessageDialog(JavaChatClientView.this,
-                                            "🎭 당신은 라이어입니다! 🎭\n\n" +
-                                                    "카테고리: " + info + "\n\n" +
-                                                    "다른 사람들의 그림을 보고\n" +
-                                                    "키워드를 추측하세요!",
-                                            "역할 - 라이어",
-                                            JOptionPane.WARNING_MESSAGE);
+
+                                    // 커스텀 다이얼로그 생성
+                                    JDialog dialog = new JDialog(JavaChatClientView.this, true);
+                                    dialog.setSize(462, 432);
+                                    dialog.setLocationRelativeTo(JavaChatClientView.this);
+                                    dialog.setResizable(false);
+
+                                    // ⭐ 배경 이미지가 있는 커스텀 패널
+                                    JPanel panel = new JPanel(new BorderLayout(10, 10)) {
+                                        Image bgImage = null;
+                                        {
+                                            try {
+                                                bgImage = new ImageIcon(getClass().getResource("/info/backGround.png")).getImage();
+                                            } catch (Exception e) {
+                                                System.err.println("경고: 배경 이미지를 찾을 수 없습니다.");
+                                            }
+                                        }
+
+                                        @Override
+                                        protected void paintComponent(Graphics g) {
+                                            super.paintComponent(g);
+                                            if (bgImage != null) {
+                                                g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+                                            }
+                                        }
+                                    };
+                                    panel.setOpaque(false);
+                                    panel.setBorder(new EmptyBorder(30, 30, 30, 30));
+
+                                    // ⭐ 카테고리 정보만 오른쪽 하단에 표시
+                                    JLabel messageLabel = new JLabel(
+                                            "<html><div style='text-align: right;'>" +
+                                                    "카테고리: " + info +
+                                                    "</div></html>"
+                                    );
+                                    messageLabel.setFont(new Font("맑은 고딕", Font.BOLD, 16));
+                                    messageLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+                                    messageLabel.setOpaque(false);
+
+                                    // ⭐ 확인 버튼을 이미지로 대체
+                                    JButton okButton = new JButton();
+                                    try {
+                                        ImageIcon icon = new ImageIcon(getClass().getResource("/info/check.png"));
+                                        Image img = icon.getImage().getScaledInstance(120, 40, Image.SCALE_SMOOTH);
+                                        okButton.setIcon(new ImageIcon(img));
+
+                                        // 이미지 버튼 스타일
+                                        okButton.setBorderPainted(false);
+                                        okButton.setContentAreaFilled(false);
+                                        okButton.setFocusPainted(false);
+                                        okButton.setOpaque(false);
+                                    } catch (Exception e) {
+                                        okButton.setText("확인");
+                                        okButton.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+                                        System.err.println("경고: 확인 버튼 이미지를 찾을 수 없습니다.");
+                                    }
+                                    okButton.setPreferredSize(new Dimension(120, 40));
+                                    okButton.addActionListener(e -> dialog.dispose());
+
+                                    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                                    buttonPanel.setOpaque(false);
+                                    buttonPanel.add(okButton);
+
+                                    // ⭐ 하단 패널 구성 (메시지 + 버튼)
+                                    JPanel bottomPanel = new JPanel(new BorderLayout());
+                                    bottomPanel.setOpaque(false);
+                                    bottomPanel.add(messageLabel, BorderLayout.EAST); // 오른쪽에 배치
+                                    bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+                                    panel.add(bottomPanel, BorderLayout.SOUTH);
+
+                                    dialog.add(panel);
+                                    dialog.setVisible(true);
+
                                 } else if (role.equals("CITIZEN")) {
                                     isLiar = false;
                                     myKeyword = info;
-                                    JOptionPane.showMessageDialog(JavaChatClientView.this,
-                                            "✅ 당신은 시민입니다! ✅\n\n" +
-                                                    "키워드: " + info + "\n\n" +
-                                                    "이 키워드를 그려주세요!",
-                                            "역할 - 시민",
-                                            JOptionPane.INFORMATION_MESSAGE);
+
+                                    JDialog dialog = new JDialog(JavaChatClientView.this, true);
+                                    dialog.setSize(462, 432);
+                                    dialog.setLocationRelativeTo(JavaChatClientView.this);
+                                    dialog.setResizable(false);
+
+                                    // ⭐ 배경 이미지가 있는 커스텀 패널
+                                    JPanel panel = new JPanel(new BorderLayout(10, 10)) {
+                                        Image bgImage = null;
+                                        {
+                                            try {
+                                                bgImage = new ImageIcon(getClass().getResource("/info/backGround2.png")).getImage();
+                                            } catch (Exception e) {
+                                                System.err.println("경고: 배경 이미지를 찾을 수 없습니다.");
+                                            }
+                                        }
+
+                                        @Override
+                                        protected void paintComponent(Graphics g) {
+                                            super.paintComponent(g);
+                                            if (bgImage != null) {
+                                                g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+                                            }
+                                        }
+                                    };
+                                    panel.setOpaque(false);
+                                    panel.setBorder(new EmptyBorder(30, 30, 30, 30));
+
+                                    // ⭐ 키워드 정보만 오른쪽 하단에 표시
+                                    JLabel messageLabel = new JLabel(
+                                            "<html><div style='text-align: right;'>" +
+                                                    "키워드: " + info +
+                                                    "</div></html>"
+                                    );
+                                    messageLabel.setFont(new Font("맑은 고딕", Font.BOLD, 16));
+                                    messageLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+                                    messageLabel.setOpaque(false);
+
+                                    // ⭐ 확인 버튼을 이미지로 대체
+                                    JButton okButton = new JButton();
+                                    try {
+                                        ImageIcon icon = new ImageIcon(getClass().getResource("/info/check2.png"));
+                                        Image img = icon.getImage().getScaledInstance(120, 40, Image.SCALE_SMOOTH);
+                                        okButton.setIcon(new ImageIcon(img));
+
+                                        // 이미지 버튼 스타일
+                                        okButton.setBorderPainted(false);
+                                        okButton.setContentAreaFilled(false);
+                                        okButton.setFocusPainted(false);
+                                        okButton.setOpaque(false);
+                                    } catch (Exception e) {
+                                        okButton.setText("확인");
+                                        okButton.setFont(new Font("맑은 고딕", Font.BOLD, 14));
+                                        System.err.println("경고: 확인 버튼 이미지를 찾을 수 없습니다.");
+                                    }
+                                    okButton.setPreferredSize(new Dimension(120, 40));
+                                    okButton.addActionListener(e -> dialog.dispose());
+
+                                    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                                    buttonPanel.setOpaque(false);
+                                    buttonPanel.add(okButton);
+
+                                    // ⭐ 하단 패널 구성 (메시지 + 버튼)
+                                    JPanel bottomPanel = new JPanel(new BorderLayout());
+                                    bottomPanel.setOpaque(false);
+                                    bottomPanel.add(messageLabel, BorderLayout.EAST); // 오른쪽에 배치
+                                    bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+                                    panel.add(bottomPanel, BorderLayout.SOUTH);
+
+                                    dialog.add(panel);
+                                    dialog.setVisible(true);
                                 }
 
                                 appendText("===== 게임이 시작되었습니다! =====");
@@ -538,19 +851,15 @@ public class JavaChatClientView extends JFrame {
                             updateTurnInfo(turnIndex, round, currentPlayer, remainingSeconds);
                         });
                     }
-                    // ★★★ 여기가 가장 중요 수정 포인트 ★★★
                     else if (msg.startsWith("/gameEnded")) {
                         System.out.println("[Client] 게임 종료 수신 - 투표 화면으로 전환");
-                        isRunning = false; // 루프 조건 해제
+                        isRunning = false;
 
-                        // UI 전환 예약
                         SwingUtilities.invokeLater(() -> {
                             appendText("===== 게임이 종료되었습니다! 투표를 시작합니다. =====");
                             openVotingUI();
                         });
 
-                        // ★핵심★: 여기서 즉시 break를 걸어야
-                        // 이 스레드가 다음 메시지(/voteResult)를 훔쳐가지 않습니다.
                         break;
                     }
                     else if (msg.startsWith("/playerJoined ")) {

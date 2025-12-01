@@ -10,8 +10,9 @@ import java.net.URL;
 import java.util.List;
 
 /**
- * 투표 UI - 최종 수정 (여백 제거 및 타이틀 초기화)
- * 라이어 적발 시 대기 화면에서 이미지가 창에 완벽히 꽉 차도록 contentPane 교체
+ * 투표 UI - 수정됨
+ * 1. 상단 제목 패널 제거
+ * 2. 배경화면을 /PlayUI/Voting.png 이미지로 변경
  */
 public class VotingUI extends JFrame {
     private String userName;
@@ -22,7 +23,7 @@ public class VotingUI extends JFrame {
     private String serverIp;
     private String serverPort;
 
-    private JLabel lblTitle;
+    // lblTitle 제거됨
     private JPanel votingPanel;
     private JButton[] voteButtons;
     private String selectedPlayer;
@@ -46,27 +47,53 @@ public class VotingUI extends JFrame {
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setBounds(100, 100, 600, 500);
 
-        JPanel contentPane = new JPanel();
-        // 초기 투표 화면은 여백이 필요함
+        // ★★★ [수정] 배경 이미지를 그리는 패널로 교체 ★★★
+        JPanel contentPane = new JPanel() {
+            private Image bgImage;
+            {
+                URL url = getClass().getResource("/PlayUI/Voting.png");
+                if (url != null) {
+                    bgImage = new ImageIcon(url).getImage();
+                } else {
+                    System.err.println("배경 이미지를 찾을 수 없습니다: /PlayUI/Voting.png");
+                }
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (bgImage != null) {
+                    g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+                } else {
+                    // 이미지가 없을 경우 기본 배경색
+                    g.setColor(new Color(245, 245, 250));
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                }
+            }
+        };
+
+        // 이미지에 맞춰 여백 조정 (필요 시 숫자 조절 가능)
         contentPane.setBorder(new EmptyBorder(20, 20, 20, 20));
         contentPane.setLayout(new BorderLayout(10, 10));
-        contentPane.setBackground(new Color(245, 245, 250));
         setContentPane(contentPane);
 
-        // 상단 제목
+        // ★★★ [삭제] 상단 제목 패널(topPanel) 제거함 ★★★
+        /*
         JPanel topPanel = new JPanel();
         topPanel.setOpaque(false);
         lblTitle = new JLabel("누가 라이어일까요?");
-        lblTitle.setFont(new Font("맑은 고딕", Font.BOLD, 28));
-        lblTitle.setForeground(new Color(50, 50, 150));
-        topPanel.add(lblTitle);
+        // ... (생략) ...
         contentPane.add(topPanel, BorderLayout.NORTH);
+        */
 
         // 중앙 투표 패널
         votingPanel = new JPanel();
         votingPanel.setLayout(new GridLayout(2, 2, 20, 20));
-        votingPanel.setOpaque(false);
-        votingPanel.setBorder(new EmptyBorder(30, 50, 30, 50));
+        votingPanel.setOpaque(false); // 배경 투명화
+
+        // 상단 타이틀이 없어졌으므로, 이미지를 가리지 않도록 상단 여백을 좀 더 줄 수도 있습니다.
+        // 현재는 기존 값 유지 (30, 50, 30, 50)
+        votingPanel.setBorder(new EmptyBorder(70, 50, 30, 50));
 
         voteButtons = new JButton[players.size()];
 
@@ -84,7 +111,7 @@ public class VotingUI extends JFrame {
 
             // 플레이어 아이콘
             JLabel iconLabel = new JLabel("👤", SwingConstants.CENTER);
-            iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 50));
+            iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 40));
             btnVote.add(iconLabel, BorderLayout.CENTER);
 
             // 플레이어 이름
@@ -143,17 +170,36 @@ public class VotingUI extends JFrame {
 
         // 하단 확인 버튼
         JPanel bottomPanel = new JPanel();
-        bottomPanel.setOpaque(false);
-        bottomPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
+        bottomPanel.setOpaque(false); // 배경 투명화
+        bottomPanel.setBorder(new EmptyBorder(10, 0, 20, 0)); // 하단 여백 조정
 
-        JButton btnConfirm = new JButton("투표하기");
-        btnConfirm.setPreferredSize(new Dimension(200, 50));
-        btnConfirm.setFont(new Font("맑은 고딕", Font.BOLD, 18));
-        btnConfirm.setBackground(new Color(100, 150, 255));
-        btnConfirm.setForeground(Color.WHITE);
+        JButton btnConfirm = new JButton();
+        int btnWidth = 200;
+        int btnHeight = 50;
+        btnConfirm.setPreferredSize(new Dimension(btnWidth, btnHeight));
+
+        try {
+            URL btnUrl = getClass().getResource("/PlayUI/VoteButton.png");
+            if (btnUrl != null) {
+                ImageIcon icon = new ImageIcon(btnUrl);
+                Image img = icon.getImage().getScaledInstance(btnWidth, btnHeight, Image.SCALE_SMOOTH);
+                btnConfirm.setIcon(new ImageIcon(img));
+                applyButtonEffects(btnConfirm); //버튼 효과 적용
+            } else {
+                btnConfirm.setText("투표하기");
+                System.err.println("이미지를 찾을 수 없습니다: /PlayUI/VoteButton.png");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            btnConfirm.setText("투표하기");
+        }
+
+        // 버튼 스타일 투명화
+        btnConfirm.setBorderPainted(false);
+        btnConfirm.setContentAreaFilled(false);
         btnConfirm.setFocusPainted(false);
-        btnConfirm.setBorder(BorderFactory.createEmptyBorder());
-
+        btnConfirm.setOpaque(false);
+        btnConfirm.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnConfirm.addActionListener(e -> submitVote());
 
         bottomPanel.add(btnConfirm);
@@ -185,6 +231,37 @@ public class VotingUI extends JFrame {
                 new EmptyBorder(10, 10, 10, 10)
         ));
     }
+    // 버튼에 호버(밝게) 및 클릭(어둡게) 효과를 자동으로 적용하는 메서드
+    private void applyButtonEffects(JButton button) {
+        if (button.getIcon() == null) return;
+
+        ImageIcon originalIcon = (ImageIcon) button.getIcon();
+        Image originalImage = originalIcon.getImage();
+
+        //BufferedImage로 변환
+        int w = originalImage.getWidth(null);
+        int h = originalImage.getHeight(null);
+        java.awt.image.BufferedImage bufferedImage = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = bufferedImage.createGraphics();
+        g2.drawImage(originalImage, 0, 0, null);
+        g2.dispose();
+
+        //호버 효과 (밝게: 1.2배)
+        java.awt.image.RescaleOp hoverFilter = new java.awt.image.RescaleOp(1.2f, 0, null);
+        java.awt.image.BufferedImage hoverImage = hoverFilter.filter(bufferedImage, null);
+        button.setRolloverIcon(new ImageIcon(hoverImage));
+
+        //클릭 효과 (어둡게: 0.8배)
+        java.awt.image.RescaleOp pressFilter = new java.awt.image.RescaleOp(0.8f, 0, null);
+        java.awt.image.BufferedImage pressImage = pressFilter.filter(bufferedImage, null);
+        button.setPressedIcon(new ImageIcon(pressImage));
+
+        //기본 설정 강제 (투명화 등)
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setFocusPainted(false);
+        button.setOpaque(false);
+    }
 
     private void submitVote() {
         if (hasVoted) {
@@ -211,10 +288,6 @@ public class VotingUI extends JFrame {
             for (JButton btn : voteButtons) {
                 btn.setEnabled(false);
             }
-
-            lblTitle.setText("투표 완료! 결과를 기다리는 중...");
-            lblTitle.setForeground(new Color(100, 100, 100));
-
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this,
                     "투표 전송 중 오류가 발생했습니다.",
@@ -244,12 +317,7 @@ public class VotingUI extends JFrame {
                                     new InsertAnswerUI(userName, dos, dis, roomId, serverIp, serverPort);
                                     dispose();
                                 } else {
-                                    // 타인이 라이어 -> 대기 화면으로 전환
-
-                                    // 1. 타이틀 제거
-                                    setTitle("");
-
-                                    // 2. 완전히 새로운 패널 생성 (여백 없음)
+                                    //완전히 새로운 패널 생성 (여백 없음)
                                     JPanel fullWaitPanel = new JPanel() {
                                         private Image waitImage;
                                         {
@@ -274,16 +342,16 @@ public class VotingUI extends JFrame {
                                     };
                                     fullWaitPanel.setLayout(new BorderLayout());
 
-                                    // 3. 기존 contentPane을 새 패널로 통째로 교체
+                                    //기존 contentPane을 새 패널로 통째로 교체
                                     setContentPane(fullWaitPanel);
 
-                                    // 4. 화면 갱신
+                                    //화면 갱신
                                     revalidate();
                                     repaint();
                                 }
                             } else {
                                 // 시민이 억울하게 지목됨 -> 결과창 이동 (창 닫음)
-                                new ResultUI(userName, false, mostVoted + "님이 억울하게 투표되었습니다! 실제 라이어는 다른 플레이어였습니다.\n정답을 확인하세요!", dos, roomId, serverIp, serverPort);
+                                new ResultUI(userName, false, mostVoted + "님이 억울하게 투표되었습니다!\n실제 라이어는 다른 플레이어였습니다.\n", dos, roomId, serverIp, serverPort);
                                 dispose();
                             }
                         });

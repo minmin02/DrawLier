@@ -6,11 +6,12 @@ import java.awt.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.util.List;
 
 /**
- * 투표 UI - 수정됨
- * 라이어 적발 시 스트림 충돌 방지를 위해 리스너 스레드 종료 처리 추가
+ * 투표 UI - 최종 수정 (여백 제거 및 타이틀 초기화)
+ * 라이어 적발 시 대기 화면에서 이미지가 창에 완벽히 꽉 차도록 contentPane 교체
  */
 public class VotingUI extends JFrame {
     private String userName;
@@ -46,6 +47,7 @@ public class VotingUI extends JFrame {
         setBounds(100, 100, 600, 500);
 
         JPanel contentPane = new JPanel();
+        // 초기 투표 화면은 여백이 필요함
         contentPane.setBorder(new EmptyBorder(20, 20, 20, 20));
         contentPane.setLayout(new BorderLayout(10, 10));
         contentPane.setBackground(new Color(245, 245, 250));
@@ -230,75 +232,71 @@ public class VotingUI extends JFrame {
                     System.out.println("[VotingUI] 수신한 메시지: " + msg);
 
                     if (msg.startsWith("/voteResult ")) {
-                        // "/voteResult 최다득표자|라이어여부"
                         String[] parts = msg.substring(12).split("\\|");
                         String mostVoted = parts[0];
                         boolean isLiar = parts[1].equals("true");
 
-                        System.out.println("[VotingUI] 투표 결과 - 최다득표: " + mostVoted + ", 라이어: " + isLiar);
-
                         SwingUtilities.invokeLater(() -> {
                             if (isLiar) {
-                                // 라이어가 최다 득표 -> 라이어에게 답 입력 기회
-                                System.out.println("[VotingUI] 라이어 적발! userName=" + userName + ", mostVoted=" + mostVoted);
+                                // 라이어 적발 시
                                 if (userName.equals(mostVoted)) {
-                                    System.out.println("[VotingUI] 본인이 라이어 - InsertAnswerUI 열기");
-                                    // 라이어 본인만 InsertAnswerUI로 전환
+                                    // 본인이 라이어 -> 정답 입력 UI로 이동 (창 닫음)
                                     new InsertAnswerUI(userName, dos, dis, roomId, serverIp, serverPort);
                                     dispose();
                                 } else {
-                                    System.out.println("[VotingUI] 다른 플레이어 - 대기 중 (dispose 안 함)");
-                                    lblTitle.setText(mostVoted + "님이 라이어로 적발! 정답 맞추기 진행 중...");
-                                    lblTitle.setForeground(new Color(220, 53, 69));
+                                    // 타인이 라이어 -> 대기 화면으로 전환
 
-                                    // 투표 버튼들 비활성화
-                                    for (JButton btn : voteButtons) {
-                                        btn.setEnabled(false);
-                                    }
+                                    // 1. 타이틀 제거
+                                    setTitle("");
 
-                                    // 투표 패널을 대기 메시지로 교체
-                                    votingPanel.removeAll();
-                                    JLabel waitLabel = new JLabel("<html><center>라이어 " + mostVoted + "님이<br>정답을 맞추는 중입니다...<br><br>잠시만 기다려주세요</center></html>");
-                                    waitLabel.setFont(new Font("맑은 고딕", Font.BOLD, 18));
-                                    waitLabel.setForeground(new Color(100, 100, 100));
-                                    waitLabel.setHorizontalAlignment(SwingConstants.CENTER);
-                                    votingPanel.setLayout(new BorderLayout());
-                                    votingPanel.add(waitLabel, BorderLayout.CENTER);
-                                    votingPanel.revalidate();
-                                    votingPanel.repaint();
+                                    // 2. 완전히 새로운 패널 생성 (여백 없음)
+                                    JPanel fullWaitPanel = new JPanel() {
+                                        private Image waitImage;
+                                        {
+                                            URL url = getClass().getResource("/PlayUI/WaitingUI.png");
+                                            if (url != null) {
+                                                waitImage = new ImageIcon(url).getImage();
+                                            }
+                                        }
+
+                                        @Override
+                                        protected void paintComponent(Graphics g) {
+                                            super.paintComponent(g);
+                                            if (waitImage != null) {
+                                                // 창 크기에 맞춰 이미지 꽉 차게 그리기
+                                                g.drawImage(waitImage, 0, 0, getWidth(), getHeight(), this);
+                                            } else {
+                                                // 이미지 로드 실패 시 검은 배경
+                                                g.setColor(Color.BLACK);
+                                                g.fillRect(0, 0, getWidth(), getHeight());
+                                            }
+                                        }
+                                    };
+                                    fullWaitPanel.setLayout(new BorderLayout());
+
+                                    // 3. 기존 contentPane을 새 패널로 통째로 교체
+                                    setContentPane(fullWaitPanel);
+
+                                    // 4. 화면 갱신
+                                    revalidate();
+                                    repaint();
                                 }
                             } else {
-                                // 라이어가 아닌 사람이 최다 득표 -> 라이어 승리 (게임 즉시 종료)
-                                System.out.println("[VotingUI] 시민이 억울하게 투표됨 - ResultUI 열기");
+                                // 시민이 억울하게 지목됨 -> 결과창 이동 (창 닫음)
                                 new ResultUI(userName, false, mostVoted + "님이 억울하게 투표되었습니다! 실제 라이어는 다른 플레이어였습니다.\n정답을 확인하세요!", dos, roomId, serverIp, serverPort);
                                 dispose();
                             }
                         });
 
-                        // ★ 중요 수정 ★
-                        // 라이어 본인은 InsertAnswerUI로 넘어가서 새 리스너를 시작하므로,
-                        // 여기서는 스트림을 놔주기 위해 루프를 탈출해야 함.
-                        if (isLiar && userName.equals(mostVoted)) {
-                            System.out.println("[VotingUI] 라이어 화면 전환으로 인한 리스너 스레드 종료");
-                            break;
-                        }
-
-                        // 라이어가 아닌 사람이 뽑혔다면 게임이 끝났으므로 루프 종료
-                        if (!isLiar) {
-                            break;
-                        }
-
-                        // 라이어가 아닌 플레이어들은 루프를 계속 돌며 /finalResult를 기다림
+                        if (isLiar && userName.equals(mostVoted)) break;
+                        if (!isLiar) break;
                     }
                     else if (msg.startsWith("/finalResult ")) {
-                        // 라이어의 정답 맞추기 결과 (시민들 화면에서 수신)
-                        System.out.println("[VotingUI] 최종 결과 수신");
                         String[] parts = msg.substring(13).split("\\|", 3);
                         boolean citizenWin = parts[0].equals("CITIZEN");
                         String message = parts[2];
 
                         SwingUtilities.invokeLater(() -> {
-                            System.out.println("[VotingUI] ResultUI 열기 - 시민승리: " + citizenWin);
                             new ResultUI(userName, citizenWin, message, dos, roomId, serverIp, serverPort);
                             dispose();
                         });
@@ -306,7 +304,6 @@ public class VotingUI extends JFrame {
                     }
                 }
             } catch (IOException e) {
-                System.err.println("투표 결과 수신 오류");
                 e.printStackTrace();
             }
         }

@@ -696,6 +696,9 @@ public class JavaChatClientView extends JFrame {
                             String info = parts[1];
 
                             SwingUtilities.invokeLater(() -> {
+                                if(btnLeaveRoom != null){
+                                    btnLeaveRoom.setEnabled(false); //나가기 버튼 비활성화
+                                }
                                 if (role.equals("LIAR")) {
                                     isLiar = true;
                                     myKeyword = info;

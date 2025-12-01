@@ -154,8 +154,8 @@ public class ResultUI extends JFrame {
 
         // 이미지 버튼 생성
         JButton btnConfirm = new JButton();
-        int btnWidth = 180;
-        int btnHeight = 50;
+        int btnWidth = 100;
+        int btnHeight = 30;
         btnConfirm.setPreferredSize(new Dimension(btnWidth, btnHeight));
 
         try {

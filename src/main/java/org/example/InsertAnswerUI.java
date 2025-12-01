@@ -161,8 +161,8 @@ public class InsertAnswerUI extends JFrame {
 
         //이미지 버튼 생성
         btnSubmit = new JButton();
-        int btnWidth = 220;
-        int btnHeight = 55;
+        int btnWidth = 100;
+        int btnHeight = 30;
         btnSubmit.setPreferredSize(new Dimension(btnWidth, btnHeight));
 
         try {

@@ -111,7 +111,7 @@ public class VotingUI extends JFrame {
 
             // 플레이어 아이콘
             JLabel iconLabel = new JLabel("👤", SwingConstants.CENTER);
-            iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 40));
+            iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 30));
             btnVote.add(iconLabel, BorderLayout.CENTER);
 
             // 플레이어 이름
@@ -174,8 +174,8 @@ public class VotingUI extends JFrame {
         bottomPanel.setBorder(new EmptyBorder(10, 0, 20, 0)); // 하단 여백 조정
 
         JButton btnConfirm = new JButton();
-        int btnWidth = 200;
-        int btnHeight = 50;
+        int btnWidth = 100;
+        int btnHeight = 30;
         btnConfirm.setPreferredSize(new Dimension(btnWidth, btnHeight));
 
         try {

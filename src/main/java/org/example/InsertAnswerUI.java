@@ -6,10 +6,15 @@ import java.awt.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.URL;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 
 /**
- * 라이어 정답 입력 UI
- * 라이어가 최다 득표되었을 때, 정답을 맞출 마지막 기회
+ * 라이어 정답 입력 UI - 수정됨
+ * 1. 배경 이미지 (/PlayUI/InsertAnswer.png) 적용
+ * 2. 불필요한 텍스트/라벨 제거
+ * 3. 제출 버튼 이미지 (/PlayUI/Submit.png) 적용
  */
 public class InsertAnswerUI extends JFrame {
     private String userName;
@@ -34,86 +39,97 @@ public class InsertAnswerUI extends JFrame {
         initializeUI();
         new ListenResult().start();
     }
+    // 버튼에 호버(밝게) 및 클릭(어둡게) 효과를 자동으로 적용하는 메서드
+    private void applyButtonEffects(JButton button) {
+        if (button.getIcon() == null) return;
+
+        ImageIcon originalIcon = (ImageIcon) button.getIcon();
+        Image originalImage = originalIcon.getImage();
+
+        //BufferedImage로 변환
+        int w = originalImage.getWidth(null);
+        int h = originalImage.getHeight(null);
+        java.awt.image.BufferedImage bufferedImage = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = bufferedImage.createGraphics();
+        g2.drawImage(originalImage, 0, 0, null);
+        g2.dispose();
+
+        //호버 효과 (밝게: 1.2배)
+        java.awt.image.RescaleOp hoverFilter = new java.awt.image.RescaleOp(1.2f, 0, null);
+        java.awt.image.BufferedImage hoverImage = hoverFilter.filter(bufferedImage, null);
+        button.setRolloverIcon(new ImageIcon(hoverImage));
+
+        //클릭 효과 (어둡게: 0.8배)
+        java.awt.image.RescaleOp pressFilter = new java.awt.image.RescaleOp(0.8f, 0, null);
+        java.awt.image.BufferedImage pressImage = pressFilter.filter(bufferedImage, null);
+        button.setPressedIcon(new ImageIcon(pressImage));
+
+        //기본 설정 강제 (투명화 등)
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setFocusPainted(false);
+        button.setOpaque(false);
+    }
 
     private void initializeUI() {
         setTitle("DrawLier - 마지막 기회!");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setBounds(100, 100, 550, 400);
 
-        JPanel contentPane = new JPanel();
-        contentPane.setBorder(new EmptyBorder(30, 30, 30, 30));
-        contentPane.setLayout(new BorderLayout(20, 20));
+        // ★★★ [수정] 배경 이미지를 그리는 패널 설정 ★★★
+        JPanel contentPane = new JPanel() {
+            private BufferedImage bgImage;
 
-        // 그라데이션 배경
-        contentPane = new JPanel() {
+            {
+                try {
+                    URL imageUrl = getClass().getResource("/PlayUI/InsertAnswer.png");
+                    if (imageUrl != null) {
+                        bgImage = ImageIO.read(imageUrl);
+                    } else {
+                        System.err.println("이미지 리소스를 찾을 수 없습니다: /PlayUI/InsertAnswer.png");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                GradientPaint gp = new GradientPaint(
-                        0, 0, new Color(255, 230, 230),
-                        0, getHeight(), new Color(255, 200, 200)
-                );
-                g2d.setPaint(gp);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
+                if (bgImage != null) {
+                    g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+                } else {
+                    // 이미지 없을 시 기본 배경
+                    g.setColor(new Color(255, 230, 230));
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                }
             }
         };
-        contentPane.setBorder(new EmptyBorder(30, 30, 30, 30));
-        contentPane.setLayout(new BorderLayout(20, 20));
+
+        // 여백 설정
+        contentPane.setBorder(new EmptyBorder(0, 0, 0, 0));
+        contentPane.setLayout(new BorderLayout(0, 0));
         setContentPane(contentPane);
 
-        // 상단 안내 패널
-        JPanel topPanel = new JPanel();
-        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
-        topPanel.setOpaque(false);
-
-        JLabel lblIcon = new JLabel("🎭", SwingConstants.CENTER);
-        lblIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 70));
-        lblIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel lblTitle = new JLabel("라이어가 적발되었습니다!");
-        lblTitle.setFont(new Font("맑은 고딕", Font.BOLD, 26));
-        lblTitle.setForeground(new Color(220, 53, 69));
-        lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        lblTitle.setBorder(new EmptyBorder(10, 0, 0, 0));
-
-        JLabel lblInfo = new JLabel("정답을 맞추면 역전 승리!");
-        lblInfo.setFont(new Font("맑은 고딕", Font.BOLD, 17));
-        lblInfo.setForeground(new Color(150, 50, 50));
-        lblInfo.setAlignmentX(Component.CENTER_ALIGNMENT);
-        lblInfo.setBorder(new EmptyBorder(5, 0, 0, 0));
-
-        JLabel lblHint = new JLabel("(힌트: 카테고리를 참고하세요)");
-        lblHint.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
-        lblHint.setForeground(new Color(100, 100, 100));
-        lblHint.setAlignmentX(Component.CENTER_ALIGNMENT);
-        lblHint.setBorder(new EmptyBorder(3, 0, 0, 0));
-
-        topPanel.add(lblIcon);
-        topPanel.add(lblTitle);
-        topPanel.add(lblInfo);
-        topPanel.add(lblHint);
-        contentPane.add(topPanel, BorderLayout.NORTH);
-
-        // 중앙 입력 패널
+        // 중앙 입력 패널 (투명)
         JPanel centerPanel = new JPanel();
-        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setLayout(new BorderLayout());
         centerPanel.setOpaque(false);
-        centerPanel.setBorder(new EmptyBorder(20, 30, 20, 30));
 
-        JLabel lblPrompt = new JLabel("정답 키워드를 입력하세요:");
-        lblPrompt.setFont(new Font("맑은 고딕", Font.BOLD, 16));
-        lblPrompt.setForeground(new Color(50, 50, 50));
-        lblPrompt.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // 입력창 위치 조정을 위한 여백 (배경 이미지 디자인에 맞춰 숫자를 조절하세요)
+        // 위쪽 여백을 많이 주어 입력창을 화면 중앙/하단으로 내림
+        centerPanel.setBorder(new EmptyBorder(180, 80, 20, 80));
 
+        // 입력 필드 설정
         txtAnswer = new JTextField();
         txtAnswer.setFont(new Font("맑은 고딕", Font.BOLD, 20));
-        txtAnswer.setMaximumSize(new Dimension(400, 55));
         txtAnswer.setHorizontalAlignment(JTextField.CENTER);
         txtAnswer.setBackground(Color.WHITE);
+
+        // 입력 필드 테두리 스타일
         txtAnswer.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(220, 53, 69), 3, true),
-                new EmptyBorder(12, 20, 12, 20)
+                new EmptyBorder(10, 10, 10, 10)
         ));
 
         // 입력 필드 포커스 효과
@@ -121,51 +137,56 @@ public class InsertAnswerUI extends JFrame {
             public void focusGained(java.awt.event.FocusEvent evt) {
                 txtAnswer.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(new Color(255, 100, 100), 3, true),
-                        new EmptyBorder(12, 20, 12, 20)
+                        new EmptyBorder(10, 10, 10, 10)
                 ));
             }
             public void focusLost(java.awt.event.FocusEvent evt) {
                 txtAnswer.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(new Color(220, 53, 69), 3, true),
-                        new EmptyBorder(12, 20, 12, 20)
+                        new EmptyBorder(10, 10, 10, 10)
                 ));
             }
         });
 
         txtAnswer.addActionListener(e -> submitAnswer());
 
-        centerPanel.add(lblPrompt);
-        centerPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-        centerPanel.add(txtAnswer);
-
+        // 중앙 패널에 입력창 추가
+        centerPanel.add(txtAnswer, BorderLayout.CENTER);
         contentPane.add(centerPanel, BorderLayout.CENTER);
 
-        // 하단 버튼 패널
+        // 하단 버튼 패널 (투명)
         JPanel bottomPanel = new JPanel();
         bottomPanel.setOpaque(false);
+        bottomPanel.setBorder(new EmptyBorder(10, 0, 40, 0)); // 하단 여백
 
-        btnSubmit = new JButton("정답 제출하기");
-        btnSubmit.setPreferredSize(new Dimension(220, 55));
-        btnSubmit.setFont(new Font("맑은 고딕", Font.BOLD, 18));
-        btnSubmit.setBackground(new Color(220, 53, 69));
-        btnSubmit.setForeground(Color.WHITE);
-        btnSubmit.setFocusPainted(false);
+        //이미지 버튼 생성
+        btnSubmit = new JButton();
+        int btnWidth = 100;
+        int btnHeight = 30;
+        btnSubmit.setPreferredSize(new Dimension(btnWidth, btnHeight));
+
+        try {
+            URL btnUrl = getClass().getResource("/PlayUI/Submit.png");
+            if (btnUrl != null) {
+                ImageIcon icon = new ImageIcon(btnUrl);
+                Image img = icon.getImage().getScaledInstance(btnWidth, btnHeight, Image.SCALE_SMOOTH);
+                btnSubmit.setIcon(new ImageIcon(img));
+                applyButtonEffects(btnSubmit); //버튼 효과 적용
+            } else {
+                btnSubmit.setText("정답 제출");
+                System.err.println("이미지를 찾을 수 없습니다: /PlayUI/Submit.png");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            btnSubmit.setText("정답 제출");
+        }
+
+        // 버튼 스타일 투명화
         btnSubmit.setBorderPainted(false);
+        btnSubmit.setContentAreaFilled(false);
+        btnSubmit.setFocusPainted(false);
+        btnSubmit.setOpaque(false);
         btnSubmit.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        // 버튼 호버 효과
-        btnSubmit.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                if (btnSubmit.isEnabled()) {
-                    btnSubmit.setBackground(new Color(200, 35, 51));
-                }
-            }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                if (btnSubmit.isEnabled()) {
-                    btnSubmit.setBackground(new Color(220, 53, 69));
-                }
-            }
-        });
 
         btnSubmit.addActionListener(e -> submitAnswer());
 
@@ -200,11 +221,10 @@ public class InsertAnswerUI extends JFrame {
             hasSubmitted = true;
 
             btnSubmit.setEnabled(false);
-            btnSubmit.setBackground(Color.GRAY);
-            btnSubmit.setText("제출 완료...");
+            // 이미지가 아닌 텍스트 변경은 제거하거나, 이미지를 흑백 처리하는 로직 등이 필요할 수 있음
+            // 여기서는 단순 비활성화 처리
             txtAnswer.setEnabled(false);
 
-            // 대기 메시지 표시
             JOptionPane.showMessageDialog(this,
                     "정답을 제출했습니다.\n결과를 확인하는 중...",
                     "제출 완료",
@@ -219,8 +239,6 @@ public class InsertAnswerUI extends JFrame {
             e.printStackTrace();
 
             btnSubmit.setEnabled(true);
-            btnSubmit.setBackground(new Color(220, 53, 69));
-            btnSubmit.setText("정답 제출하기");
             txtAnswer.setEnabled(true);
         }
     }
@@ -234,7 +252,6 @@ public class InsertAnswerUI extends JFrame {
                     System.out.println("[InsertAnswerUI] 수신한 메시지: " + msg);
 
                     if (msg.startsWith("/finalResult ")) {
-                        // "/finalResult 승리팀|라이어이름|메시지"
                         String[] parts = msg.substring(13).split("\\|", 3);
                         boolean citizenWin = parts[0].equals("CITIZEN");
                         String liarName = parts[1];

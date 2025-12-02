@@ -320,7 +320,15 @@ public class DrawServer extends JFrame {
                 }
             }
         }
-
+        //해당 방의 모든 유저에게 최신 플레이어 명단을 전송하는 메서드
+        private void broadcastPlayerList(String roomId){
+            GameRoom groom = gameRooms.get(roomId);
+            if(groom != null){
+                List<String> players = groom.getPlayers();
+                String playerStr = String.join(",",  players);
+                //WriteToRoom(roomId, "/updatePlayerList " + playerStr);
+            }
+        }
         private synchronized void closeConnection() {
             if (isClosed) return;
             isClosed = true;
@@ -328,11 +336,12 @@ public class DrawServer extends JFrame {
             try {
                 if (currentRoomId != null) {
                     updateRoomCount(currentRoomId, -1);
-                    WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName);
 
                     GameRoom groom = gameRooms.get(currentRoomId);
                     if (groom != null) {
-                        groom.removePlayer(userName);
+                        groom.removePlayer(userName); //방 데이터에서 플레이어 삭제
+                        broadcastPlayerList(currentRoomId); //남은 사람들에게 갱신된 명단 전송
+                        WriteToRoomExceptMe(currentRoomId, "/playerLeft " + userName);
                     }
                 }
 
@@ -346,7 +355,7 @@ public class DrawServer extends JFrame {
                 e.printStackTrace();
             }
         }
-
+    
         public void run() {
             try {
                 String firstMsg = dis.readUTF();
@@ -411,6 +420,7 @@ public class DrawServer extends JFrame {
                         }
 
                         WriteToRoomExceptMe(roomId, "/playerJoined " + userName);
+                        broadcastPlayerList(roomId); //새로 들어온 사람을 포함해서 명단 갱신
                     }
                     else if (msg.startsWith("/leaveRoom")) {
                         if (currentRoomId != null) {

@@ -6,22 +6,24 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.io.*;
 import java.net.Socket;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 /**
- * 게임 클라이언트 뷰 - 수정됨
- * 중요 수정사항: 게임 종료 시 ListenNetwork 스레드를 즉시 break하여
- * VotingUI가 입력 스트림을 독점할 수 있도록 수정
+ * 게임 클라이언트 뷰 - 말풍선 스타일 채팅 UI 적용
  */
 public class JavaChatClientView extends JFrame {
 
     private static final long serialVersionUID = 1L;
     private JPanel contentPane;
     private JTextField txtInput;
-    private JTextArea textArea;
+    private JPanel chatContainer; // JTextArea 대신 JPanel 사용
+    private JScrollPane chatScrollPane;
     private JButton btnClearAll;
-    private JButton btnLeaveRoom; //방 나가기 버튼
-    private JButton btnEmoji; //이모지 버튼
+    private JButton btnLeaveRoom;
+    private JButton btnEmoji;
 
     private DrawingPanel drawingPanel;
 
@@ -79,36 +81,64 @@ public class JavaChatClientView extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setBounds(100, 100, 1200, 800);
 
-        contentPane = new JPanel();
+        // [수정 1] contentPane을 커스텀 패널로 변경하여 배경 이미지 그리기
+        contentPane = new JPanel() {
+            // 이미지 로드 (경로: src/game/back.png)
+            Image background = new ImageIcon(getClass().getResource("/game/back.png")).getImage();
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                // 화면 가득 채우기
+                g.drawImage(background, 0, 0, getWidth(), getHeight(), this);
+            }
+        };
         contentPane.setBorder(new EmptyBorder(10, 10, 10, 10));
         contentPane.setLayout(new BorderLayout(10, 10));
-        contentPane.setBackground(Color.WHITE);
         setContentPane(contentPane);
 
+        // [수정 2] 상단 패널 생성 및 투명화
         JPanel topPanel = createTopPanel();
+        topPanel.setOpaque(false); // 배경이 보이도록 투명 설정
         contentPane.add(topPanel, BorderLayout.NORTH);
 
+        // [수정 3] 스플릿 패널 투명화
         JSplitPane centerSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        centerSplitPane.setResizeWeight(0.7);
+        centerSplitPane.setResizeWeight(0.2);
+        centerSplitPane.setEnabled(false);
+        centerSplitPane.setOpaque(false); // 스플릿 패널 투명화
+        centerSplitPane.setBorder(null);  // 테두리 제거
 
+        // 그림판은 흰색 배경 유지 (그려야 하니까)
         drawingPanel = new DrawingPanel();
         drawingPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
 
         JPanel drawContainer = new JPanel(new BorderLayout());
+        drawContainer.setOpaque(false); // 컨테이너 투명화
         drawContainer.add(drawingPanel, BorderLayout.CENTER);
-        drawContainer.add(createToolPanel(), BorderLayout.SOUTH);
+
+        // 도구 패널 생성 (아래 createToolPanel 수정 필요)
+        JPanel toolPanel = createToolPanel();
+        drawContainer.add(toolPanel, BorderLayout.SOUTH);
 
         centerSplitPane.setLeftComponent(drawContainer);
 
+        // 채팅창은 가독성을 위해 흰색 배경 유지 (createChatPanel 내부 설정 따름)
         JPanel chatPanel = createChatPanel();
         centerSplitPane.setRightComponent(chatPanel);
 
+        centerSplitPane.setDividerLocation(0.38); // 비율 유지
         contentPane.add(centerSplitPane, BorderLayout.CENTER);
 
+        // [수정 4] 플레이어 패널 생성 및 투명화
         playerPanel = createPlayerPanel();
+        // createPlayerPanel 내부에서 setOpaque(false)를 해야 함 (아래 코드 참고)
+        playerPanel.setOpaque(false);
         contentPane.add(playerPanel, BorderLayout.EAST);
 
+        // [수정 5] 하단 버튼 패널 생성 및 투명화
         JPanel bottomPanel = createBottomPanel();
+        bottomPanel.setOpaque(false);
         contentPane.add(bottomPanel, BorderLayout.SOUTH);
 
         setLocationRelativeTo(null);
@@ -132,23 +162,43 @@ public class JavaChatClientView extends JFrame {
 
     private JPanel createToolPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        panel.setBackground(new Color(240, 240, 240));
+        panel.setOpaque(false); // 도구창 배경 투명화
 
-        //방 나가기 버튼
-        btnLeaveRoom = new JButton("나가기");
+        // [수정 2] 나가기 버튼 이미지로 변경 (/game/exit.png)
+        btnLeaveRoom = new JButton();
         btnLeaveRoom.setPreferredSize(new Dimension(80, 30));
-        btnLeaveRoom.setBackground(new Color(220, 53, 69));
+
+        ImageIcon exitIcon = resizeIcon("/game/exit.png", 80, 30);
+        if (exitIcon != null) {
+            btnLeaveRoom.setIcon(exitIcon);
+        } else {
+            btnLeaveRoom.setText("나가기");
+            btnLeaveRoom.setBackground(new Color(220, 53, 69));
+            btnLeaveRoom.setForeground(Color.WHITE);
+        }
+
+        btnLeaveRoom.setContentAreaFilled(false);
+        btnLeaveRoom.setBorderPainted(false);
         btnLeaveRoom.setFocusPainted(false);
         btnLeaveRoom.addActionListener(e -> leaveRoom());
         panel.add(btnLeaveRoom);
 
-        //구분선
         panel.add(Box.createRigidArea(new Dimension(10, 0)));
         JSeparator separator = new JSeparator(SwingConstants.VERTICAL);
         separator.setPreferredSize(new Dimension(2, 25));
         panel.add(separator);
         panel.add(Box.createRigidArea(new Dimension(10, 0)));
 
+        JLabel lblStroke = new JLabel();
+        ImageIcon strictIcon = resizeIcon("/game/size.png", 40, 20); // 적절한 크기로 조정
+        if (strictIcon != null) {
+            lblStroke.setIcon(strictIcon);
+        } else {
+            lblStroke.setText("굵기:");
+        }
+        panel.add(lblStroke);
+
+        // 굵기 선택 콤보박스 (기존 유지)
         String[] widths = {"1", "2", "4", "8", "12"};
         JComboBox<String> strokeSelector = new JComboBox<>(widths);
         strokeSelector.setSelectedItem("2");
@@ -159,16 +209,23 @@ public class JavaChatClientView extends JFrame {
                 strokeWidth = 2;
             }
         });
-
-        panel.add(new JLabel("굵기:"));
         panel.add(strokeSelector);
 
-        btnColorPicker = new JButton("색상 선택");
+        btnColorPicker = new JButton();
         btnColorPicker.setPreferredSize(new Dimension(100, 30));
-        btnColorPicker.setBackground(currentColor);
-        btnColorPicker.setForeground(Color.WHITE);
-        btnColorPicker.setOpaque(true);
-        btnColorPicker.setBorderPainted(true);
+
+        ImageIcon colorIcon = resizeIcon("/game/color.png", 100, 30);
+        if (colorIcon != null) {
+            btnColorPicker.setIcon(colorIcon);
+        } else {
+            btnColorPicker.setText("색상 선택");
+            btnColorPicker.setBackground(currentColor);
+        }
+
+        btnColorPicker.setContentAreaFilled(false); // 이미지 사용 시 배경 투명
+        btnColorPicker.setFocusPainted(false);
+
+        // 초기 테두리 설정 (updateToolButtons에서 제어됨)
         updateToolButtons(btnColorPicker);
 
         btnColorPicker.addActionListener(e -> {
@@ -186,15 +243,25 @@ public class JavaChatClientView extends JFrame {
 
             if (newColor != null) {
                 currentColor = newColor;
-                btnColorPicker.setBackground(currentColor);
-
-                int brightness = (newColor.getRed() + newColor.getGreen() + newColor.getBlue()) / 3;
-                btnColorPicker.setForeground(brightness > 128 ? Color.BLACK : Color.WHITE);
+                // 이미지를 사용하므로 버튼 배경색(setBackground)은 변경해도 보이지 않을 수 있습니다.
+                // 색상을 시각적으로 보여주려면 별도의 아이콘을 갱신하거나 테두리 색을 바꾸는 등의 처리가 필요할 수 있지만,
+                // 요구사항대로 이미지만 적용합니다.
             }
         });
 
-        btnEraserTool = new JButton("지우개");
+        btnEraserTool = new JButton();
         btnEraserTool.setPreferredSize(new Dimension(80, 30));
+
+        ImageIcon eraseIcon = resizeIcon("/game/erase.png", 80, 30);
+        if (eraseIcon != null) {
+            btnEraserTool.setIcon(eraseIcon);
+        } else {
+            btnEraserTool.setText("지우개");
+        }
+
+        btnEraserTool.setContentAreaFilled(false);
+        btnEraserTool.setFocusPainted(false);
+
         btnEraserTool.addActionListener(e -> {
             if (!drawingPanel.isEnabled()) {
                 JOptionPane.showMessageDialog(this, "당신의 턴이 아닙니다!", "알림", JOptionPane.WARNING_MESSAGE);
@@ -204,7 +271,22 @@ public class JavaChatClientView extends JFrame {
             updateToolButtons(btnEraserTool);
         });
 
-        btnClearAll = new JButton("전체 지우기");
+        // 전체 지우기 버튼 (기존 유지)
+        btnClearAll = new JButton();
+        btnClearAll.setPreferredSize(new Dimension(100, 30)); // 이미지 크기에 맞춰 너비 조정
+
+        ImageIcon allEraseIcon = resizeIcon("/game/allerase.png", 100, 30);
+        if (allEraseIcon != null) {
+            btnClearAll.setIcon(allEraseIcon);
+        } else {
+            btnClearAll.setText("전체 지우기");
+        }
+
+        // 버튼 배경 투명화 및 테두리 제거
+        btnClearAll.setContentAreaFilled(false);
+        btnClearAll.setBorderPainted(false);
+        btnClearAll.setFocusPainted(false);
+
         btnClearAll.addActionListener(e -> {
             if (!drawingPanel.isEnabled()) {
                 JOptionPane.showMessageDialog(this, "당신의 턴이 아닙니다!", "알림", JOptionPane.WARNING_MESSAGE);
@@ -222,7 +304,6 @@ public class JavaChatClientView extends JFrame {
         return panel;
     }
 
-    //방 나가기 로직
     private void leaveRoom() {
         try{
             if(dos != null){
@@ -240,27 +321,78 @@ public class JavaChatClientView extends JFrame {
 
     private JPanel createTopPanel() {
         JPanel panel = new JPanel(new BorderLayout());
+        // [핵심] 최상위 패널 투명화
         panel.setOpaque(false);
+        panel.setBackground(new Color(0, 0, 0, 0)); // 혹시 모를 배경색 제거
         panel.setBorder(new EmptyBorder(0, 0, 10, 0));
 
-        lblRoomInfo = new JLabel(String.format("[%s] 카테고리: %s | 방장: %s",
-                currentRoom.getRoomName(),
-                currentRoom.getCategory(),
-                currentRoom.getHostName()));
-        lblRoomInfo.setFont(new Font("맑은 고딕", Font.BOLD, 16));
-        panel.add(lblRoomInfo, BorderLayout.WEST);
+        // [수정] 왼쪽 정보를 담을 패널 생성
+        JPanel leftInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        leftInfoPanel.setOpaque(false); // [핵심] 내부 패널도 반드시 투명화
 
+        // 1. 방 제목
+        JLabel lblRoomName = new JLabel("[" + currentRoom.getRoomName() + "]");
+        lblRoomName.setFont(new Font("맑은 고딕", Font.BOLD, 16));
+        lblRoomName.setOpaque(false); // [핵심] 라벨 투명화
+        leftInfoPanel.add(lblRoomName);
+
+        // 2. 카테고리 이미지
+        JLabel lblCategoryIcon = new JLabel();
+        ImageIcon catIcon = resizeIcon("/game/category.png", 80, 25);
+        if (catIcon != null) {
+            lblCategoryIcon.setIcon(catIcon);
+        } else {
+            lblCategoryIcon.setText("카테고리");
+        }
+        lblCategoryIcon.setOpaque(false); // [핵심] 라벨 투명화
+        leftInfoPanel.add(lblCategoryIcon);
+
+        // 3. 카테고리 값
+        JLabel lblCategoryValue = new JLabel(": " + currentRoom.getCategory());
+        lblCategoryValue.setFont(new Font("맑은 고딕", Font.BOLD, 16));
+        lblCategoryValue.setOpaque(false); // [핵심] 라벨 투명화
+        leftInfoPanel.add(lblCategoryValue);
+
+        // 4. 구분선 (|)
+        JLabel lblSep = new JLabel("|");
+        lblSep.setFont(new Font("맑은 고딕", Font.BOLD, 16));
+        lblSep.setOpaque(false); // [핵심] 라벨 투명화
+        leftInfoPanel.add(lblSep);
+
+        // 5. 방장 이미지
+        JLabel lblHostIcon = new JLabel();
+        ImageIcon hostIcon = resizeIcon("/game/host.png", 60, 25);
+        if (hostIcon != null) {
+            lblHostIcon.setIcon(hostIcon);
+        } else {
+            lblHostIcon.setText("방장");
+        }
+        lblHostIcon.setOpaque(false); // [핵심] 라벨 투명화
+        leftInfoPanel.add(lblHostIcon);
+
+        // 6. 방장 이름
+        JLabel lblHostName = new JLabel(": " + currentRoom.getHostName());
+        lblHostName.setFont(new Font("맑은 고딕", Font.BOLD, 16));
+        lblHostName.setOpaque(false); // [핵심] 라벨 투명화
+        leftInfoPanel.add(lblHostName);
+
+        // 완성된 왼쪽 패널을 메인 상단 패널의 서쪽에 추가
+        panel.add(leftInfoPanel, BorderLayout.WEST);
+
+        // 오른쪽 패널 (시간, 턴 정보)
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
-        rightPanel.setOpaque(false);
+        rightPanel.setOpaque(false); // [핵심] 오른쪽 패널 투명화
 
         lblCurrentTurn = new JLabel("게임 준비 중...");
         lblCurrentTurn.setFont(new Font("맑은 고딕", Font.BOLD, 14));
         lblCurrentTurn.setForeground(new Color(0, 102, 204));
+        lblCurrentTurn.setOpaque(false); // [핵심] 라벨 투명화
         rightPanel.add(lblCurrentTurn);
 
         lblTimer = new JLabel("남은 시간: 15초");
         lblTimer.setFont(new Font("맑은 고딕", Font.BOLD, 16));
         lblTimer.setForeground(new Color(220, 53, 69));
+        lblTimer.setOpaque(false); // [핵심] 라벨 투명화
         rightPanel.add(lblTimer);
 
         panel.add(rightPanel, BorderLayout.EAST);
@@ -268,117 +400,66 @@ public class JavaChatClientView extends JFrame {
         return panel;
     }
 
-
     /**
-     * 한글과 이모지를 모두 지원하는 폰트 생성
-     * Windows의 맑은 고딕은 한글과 기본 유니코드 이모지를 모두 지원
+     * 현대적인 말풍선 스타일 채팅 패널 생성
      */
-    private Font createKoreanFont(int size) {
-        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-        String[] availableFonts = ge.getAvailableFontFamilyNames();
-
-        // 1순위: 맑은 고딕 (한글 + 이모지 지원)
-        // Windows에서 기본 제공되며 한글과 유니코드 이모지를 모두 표시 가능
-        for (String font : availableFonts) {
-            if (font.equals("맑은 고딕") || font.equals("Malgun Gothic")) {
-                return new Font("맑은 고딕", Font.PLAIN, size);
-            }
-        }
-
-        // 2순위: Apple SD Gothic Neo (macOS 한글 폰트)
-        for (String font : availableFonts) {
-            if (font.contains("Apple SD Gothic") || font.contains("AppleSDGothicNeo")) {
-                return new Font(font, Font.PLAIN, size);
-            }
-        }
-
-        // 3순위: 나눔고딕 (한글 폰트)
-        for (String font : availableFonts) {
-            if (font.contains("나눔고딕") || font.contains("NanumGothic")) {
-                return new Font(font, Font.PLAIN, size);
-            }
-        }
-
-        // 4순위: 굴림 (Windows 기본 한글 폰트)
-        for (String font : availableFonts) {
-            if (font.equals("굴림") || font.equals("Gulim")) {
-                return new Font("굴림", Font.PLAIN, size);
-            }
-        }
-
-        // 최종 폴백: Dialog 폰트 (시스템이 자동으로 적절한 폰트 선택)
-        return new Font(Font.DIALOG, Font.PLAIN, size);
-    }
-
-    /**
-     * 이모지 표시를 위한 폰트 생성 (이모지 우선)
-     * 이모지 버튼, 이모지 선택기 등에 적용
-     */
-    private Font createEmojiFont(int size) {
-        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-        String[] availableFonts = ge.getAvailableFontFamilyNames();
-
-        // 1순위: Segoe UI Emoji (Windows 이모지 폰트)
-        for (String font : availableFonts) {
-            if (font.equals("Segoe UI Emoji")) {
-                return new Font("Segoe UI Emoji", Font.PLAIN, size);
-            }
-        }
-
-        // 2순위: Apple Color Emoji (macOS)
-        for (String font : availableFonts) {
-            if (font.equals("Apple Color Emoji")) {
-                return new Font("Apple Color Emoji", Font.PLAIN, size);
-            }
-        }
-
-        // 3순위: Noto Color Emoji (Linux)
-        for (String font : availableFonts) {
-            if (font.equals("Noto Color Emoji")) {
-                return new Font("Noto Color Emoji", Font.PLAIN, size);
-            }
-        }
-
-        // 4순위: 맑은 고딕 (일부 이모지 지원)
-        for (String font : availableFonts) {
-            if (font.equals("맑은 고딕") || font.equals("Malgun Gothic")) {
-                return new Font("맑은 고딕", Font.PLAIN, size);
-            }
-        }
-
-        // 최종 폴백: Dialog 폰트
-        return new Font(Font.DIALOG, Font.PLAIN, size);
-    }
-
     private JPanel createChatPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBorder(BorderFactory.createTitledBorder("채팅"));
+        panel.setBackground(Color.WHITE);
 
-        textArea = new JTextArea();
-        textArea.setEditable(false);
-        // ✅ 맑은 고딕 사용 (한글 + 이모지 모두 지원)
-        textArea.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
+        // 채팅 메시지들을 담을 컨테이너
+        chatContainer = new JPanel();
+        chatContainer.setLayout(new BoxLayout(chatContainer, BoxLayout.Y_AXIS));
+        chatContainer.setBackground(new Color(250, 250, 252));
+        chatContainer.setBorder(new EmptyBorder(10, 10, 10, 0)); // 오른쪽 패딩 줄여서 말풍선이 더 오른쪽에 보이도록
 
-        JScrollPane scrollPane = new JScrollPane(textArea);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        chatScrollPane = new JScrollPane(chatContainer);
+        chatScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        chatScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        chatScrollPane.setBorder(null);
+        chatScrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        panel.add(chatScrollPane, BorderLayout.CENTER);
 
-        JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
-        txtInput = new JTextField();
-        // ✅ 맑은 고딕 사용
+        // 입력 패널
+        JPanel inputPanel = new JPanel(new BorderLayout(8, 5));
+        inputPanel.setBackground(Color.WHITE);
+        inputPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+
+        // 둥근 입력창 생성
+        txtInput = new RoundedTextField(15);
         txtInput.setFont(new Font("맑은 고딕", Font.PLAIN, 14));
+        txtInput.setBorder(new EmptyBorder(10, 15, 10, 15));
+        txtInput.setBackground(new Color(250, 250, 250));
         txtInput.addActionListener(e -> sendMessage());
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        buttonPanel.setOpaque(false);
 
         btnEmoji = new JButton("😊");
-        // ✅ 맑은 고딕 사용
         btnEmoji.setFont(new Font("맑은 고딕", Font.PLAIN, 16));
-        btnEmoji.setPreferredSize(new Dimension(50, 30));
+        btnEmoji.setPreferredSize(new Dimension(50, 36));
         btnEmoji.setToolTipText("이모지 선택");
+        btnEmoji.setBackground(new Color(245, 245, 245));
+        btnEmoji.setFocusPainted(false);
+        btnEmoji.setBorder(BorderFactory.createLineBorder(new Color(220, 220, 220), 1));
         btnEmoji.addActionListener(e -> showEmojiPicker());
 
-        btnSend = new JButton("전송");
-        btnSend.setFont(new Font("맑은 고딕", Font.BOLD, 12));
+        btnSend = new JButton();
+        btnSend.setPreferredSize(new Dimension(70, 36));
+
+        // 이미지 로드 (크기는 버튼 크기에 맞춤)
+        ImageIcon sendIcon = resizeIcon("/game/send.png", 70, 36);
+        if (sendIcon != null) {
+            btnSend.setIcon(sendIcon);
+        } else {
+            btnSend.setText("전송"); // 이미지가 없을 경우 텍스트 표시
+        }
+
+        // 버튼 배경 투명화 (이미지 모양대로 보이기 위해)
+        btnSend.setContentAreaFilled(false);
+        btnSend.setBorderPainted(false);
+        btnSend.setFocusPainted(false);
         btnSend.addActionListener(e -> sendMessage());
 
         buttonPanel.add(btnEmoji);
@@ -391,9 +472,229 @@ public class JavaChatClientView extends JFrame {
         return panel;
     }
 
+    /**
+     * 현재 시간을 "HH:mm" 형식으로 반환
+     */
+    private String getCurrentTime() {
+        return new SimpleDateFormat("HH:mm").format(new Date());
+    }
+
+    /**
+     * 시스템 메시지 추가 (중앙 정렬, 회색 배경)
+     */
+    private void appendSystemMessage(String message) {
+        SwingUtilities.invokeLater(() -> {
+            JPanel messagePanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+            messagePanel.setOpaque(false);
+            messagePanel.setBorder(new EmptyBorder(3, 10, 3, 10));
+
+            JLabel systemLabel = new JLabel(message);
+            systemLabel.setFont(new Font("맑은 고딕", Font.PLAIN, 11));
+            systemLabel.setForeground(new Color(120, 120, 120));
+            systemLabel.setBorder(new EmptyBorder(4, 12, 4, 12));
+            systemLabel.setBackground(new Color(240, 240, 240));
+            systemLabel.setOpaque(true);
+
+            messagePanel.add(systemLabel);
+            chatContainer.add(messagePanel);
+            chatContainer.revalidate();
+
+            scrollToBottom();
+        });
+    }
+
+    /**
+     * 말풍선 스타일 채팅 메시지 추가
+     */
+
+
+    /**
+     * 말풍선 스타일 채팅 메시지 추가 - 완전 수정 버전
+     */
+    /**
+     * 카카오톡 스타일 말풍선 채팅 메시지 추가
+     */
+    /**
+     * 카카오톡 스타일 말풍선 채팅 메시지 추가
+     */
+    /**
+     * 카카오톡 스타일 말풍선 채팅 메시지 추가 (수정됨)
+     * - 말풍선 간격 일정하게 유지
+     * - 말풍선 높이 찌그러짐 방지
+     */
+    private void appendChatMessage(String fullMessage) {
+        SwingUtilities.invokeLater(() -> {
+            // "[입장]", "[퇴장]", "[시스템]" 등의 시스템 메시지 처리
+            if (fullMessage.startsWith("[입장]") || fullMessage.startsWith("[퇴장]") ||
+                    fullMessage.startsWith("[시스템]") || fullMessage.startsWith("=====")) {
+                appendSystemMessage(fullMessage);
+                return;
+            }
+
+            // "사용자: 메시지" 형식 파싱
+            String sender = "";
+            String message = fullMessage;
+            boolean isMyMessage = false;
+
+            if (fullMessage.contains(": ")) {
+                int colonIndex = fullMessage.indexOf(": ");
+                sender = fullMessage.substring(0, colonIndex);
+                message = fullMessage.substring(colonIndex + 2);
+                isMyMessage = sender.equals(userName);
+            }
+
+            // [수정 포인트 1] outerPanel의 높이가 찌그러지지 않도록 MaximumSize를 PreferredSize 높이로 고정
+            JPanel outerPanel = new JPanel() {
+                @Override
+                public Dimension getMaximumSize() {
+                    Dimension pref = getPreferredSize();
+                    // 너비는 꽉 채우되(Integer.MAX_VALUE), 높이는 내용물 크기(pref.height)만큼만 고정
+                    return new Dimension(Integer.MAX_VALUE, pref.height);
+                }
+            };
+
+            if (isMyMessage) {
+                outerPanel.setLayout(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+            } else {
+                outerPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            }
+            outerPanel.setOpaque(false);
+
+            // [수정 포인트 2] Box.createRigidArea 대신 패널 자체에 하단 여백(Border)을 줌
+            // (상, 좌, 하, 우) -> 하단에 10px 간격 고정
+            outerPanel.setBorder(new EmptyBorder(0, 0, 10, 0));
+
+            // ✅ 말풍선 + 시간을 담을 컨테이너
+            JPanel messageContainer = new JPanel();
+            messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.X_AXIS));
+            messageContainer.setOpaque(false);
+
+            // ✅ 말풍선 내용 - 커스텀 패널로 둥근 배경 그리기
+            Color bubbleColor = isMyMessage ? new Color(220, 240, 255) : new Color(240, 240, 240);
+            JPanel bubble = new RoundedBubblePanel(bubbleColor, isMyMessage);
+            bubble.setLayout(new BoxLayout(bubble, BoxLayout.Y_AXIS));
+            bubble.setOpaque(false);
+
+            // 꼬리 위치에 따라 패딩 조정
+            int tailSize = 18;
+            if (isMyMessage) {
+                bubble.setBorder(new EmptyBorder(8, 12, 8, 12 + tailSize));
+            } else {
+                bubble.setBorder(new EmptyBorder(8, 12 + tailSize, 8, 12));
+            }
+
+            // 발신자 이름 (상대방 메시지만 표시)
+            if (!sender.isEmpty() && !isMyMessage) {
+                JLabel nameLabel = new JLabel(sender);
+                nameLabel.setFont(new Font("맑은 고딕", Font.BOLD, 10));
+                nameLabel.setForeground(new Color(100, 100, 100));
+                nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                bubble.add(nameLabel);
+                bubble.add(Box.createVerticalStrut(2));
+            }
+
+            // ✅ 메시지 내용
+            JTextArea msgArea = new JTextArea(message);
+            msgArea.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
+            msgArea.setForeground(isMyMessage ? new Color(40, 40, 40) : Color.BLACK);
+            msgArea.setOpaque(false);
+            msgArea.setEditable(false);
+            msgArea.setLineWrap(true);
+            msgArea.setWrapStyleWord(true);
+            msgArea.setBorder(null);
+            msgArea.setColumns(18);  // 18글자 너비
+            msgArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+            bubble.add(msgArea);
+
+            // ✅ 시간 표시
+            JLabel timeLabel = new JLabel(getCurrentTime());
+            timeLabel.setFont(new Font("맑은 고딕", Font.PLAIN, 9));
+            timeLabel.setForeground(new Color(150, 150, 150));
+            timeLabel.setVerticalAlignment(SwingConstants.BOTTOM);
+
+            // ✅ 배치: 내 메시지는 [시간][말풍선], 상대는 [말풍선][시간]
+            if (isMyMessage) {
+                messageContainer.add(timeLabel);
+                messageContainer.add(Box.createHorizontalStrut(5));
+                messageContainer.add(bubble);
+            } else {
+                messageContainer.add(bubble);
+                messageContainer.add(Box.createHorizontalStrut(5));
+                messageContainer.add(timeLabel);
+            }
+
+            outerPanel.add(messageContainer);
+
+            // 말풍선 추가
+            chatContainer.add(outerPanel);
+
+            // [수정 포인트 3] 기존의 Box.createRigidArea 코드 삭제 (outerPanel Border로 대체됨)
+            // chatContainer.add(Box.createRigidArea(new Dimension(0, 6))); <--- 삭제됨
+
+            chatContainer.revalidate();
+            chatContainer.repaint();
+
+            scrollToBottom();
+        });
+    }
+
+    /**
+     * 텍스트 자동 줄바꿈 헬퍼 메서드
+     */
+    private String wrapText(String text, int maxLineLength) {
+        if (text.length() <= maxLineLength) {
+            return text;
+        }
+
+        StringBuilder wrapped = new StringBuilder();
+        int start = 0;
+
+        while (start < text.length()) {
+            int end = Math.min(start + maxLineLength, text.length());
+
+            // 단어 중간에서 자르지 않도록 공백 찾기
+            if (end < text.length()) {
+                int lastSpace = text.lastIndexOf(' ', end);
+                if (lastSpace > start) {
+                    end = lastSpace;
+                }
+            }
+
+            wrapped.append(text.substring(start, end).trim());
+            if (end < text.length()) {
+                wrapped.append("\n");
+            }
+            start = end + 1;
+        }
+
+        return wrapped.toString();
+    }
+
+
+
+
+    /**
+     *
+     * 스크롤을 맨 아래로 이동
+     */
+    private void scrollToBottom() {
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar vertical = chatScrollPane.getVerticalScrollBar();
+            vertical.setValue(vertical.getMaximum());
+        });
+    }
+
+    /**
+     * 기존 appendText 메서드를 유지하여 호환성 보장
+     */
+    private void appendText(String msg) {
+        appendChatMessage(msg);
+    }
+
     private JPanel createPlayerPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setOpaque(false); // [수정] 메인 패널 투명화
 
         java.util.List<String> players = currentRoom.getPlayers();
         panel.setBorder(BorderFactory.createTitledBorder("플레이어 (" + players.size() + "/4)"));
@@ -401,29 +702,51 @@ public class JavaChatClientView extends JFrame {
 
         playerLabels = new JLabel[4];
 
+        // [추천 사이즈] 너비 180, 높이 50
+        int imgWidth = 180;
+        int imgHeight = 50;
+
         for (int i = 0; i < 4; i++) {
             JPanel slotPanel = new JPanel(new BorderLayout());
-            slotPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-            slotPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
+            slotPanel.setOpaque(false); // [수정] 슬롯 패널 투명화
+            slotPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5)); // 여백 5
+            slotPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 65)); // 높이 여유있게
 
             playerLabels[i] = new JLabel();
-            // ✅ 맑은 고딕 사용
             playerLabels[i].setFont(new Font("맑은 고딕", Font.BOLD, 14));
-            playerLabels[i].setOpaque(true);
-            playerLabels[i].setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+            // [중요] 텍스트가 이미지 정중앙에 오도록 설정
+            playerLabels[i].setHorizontalTextPosition(JLabel.CENTER);
+            playerLabels[i].setVerticalTextPosition(JLabel.CENTER);
             playerLabels[i].setHorizontalAlignment(SwingConstants.CENTER);
+            playerLabels[i].setOpaque(false); // 배경 투명 (이미지 보이게)
 
             if (i < players.size()) {
                 String playerName = players.get(i);
                 playerLabels[i].setText(playerName);
-                playerLabels[i].setBackground(new Color(180, 220, 255));
 
                 if (playerName.equals(currentRoom.getHostName())) {
                     playerLabels[i].setText("👑 " + playerName);
                 }
+
+                // [이미지 적용] 접속한 플레이어 배경
+                ImageIcon playerIcon = resizeIcon("/game/player.png", imgWidth, imgHeight);
+                if (playerIcon != null) {
+                    playerLabels[i].setIcon(playerIcon);
+                } else {
+                    playerLabels[i].setOpaque(true);
+                    playerLabels[i].setBackground(new Color(180, 220, 255));
+                }
+
             } else {
-                playerLabels[i].setText("대기 중...");
-                playerLabels[i].setBackground(new Color(230, 230, 230));
+                // [이미지 적용] 대기 중 배경
+                ImageIcon waitingIcon = resizeIcon("/game/waiting.png", imgWidth, imgHeight);
+                if (waitingIcon != null) {
+                    playerLabels[i].setIcon(waitingIcon);
+                } else {
+                    playerLabels[i].setOpaque(true);
+                    playerLabels[i].setBackground(new Color(230, 230, 230));
+                }
             }
 
             slotPanel.add(playerLabels[i], BorderLayout.CENTER);
@@ -490,7 +813,7 @@ public class JavaChatClientView extends JFrame {
         if (msg.isEmpty()) return;
 
         if (currentRoom.isGameRunning() && !currentRoom.isPlayerTurn(userName)) {
-            appendText("[시스템] 당신의 턴이 아닙니다!");
+            appendSystemMessage("[시스템] 당신의 턴이 아닙니다!");
             txtInput.setText("");
             return;
         }
@@ -507,7 +830,6 @@ public class JavaChatClientView extends JFrame {
         JPanel emojiPanel = new JPanel(new GridLayout(8, 6, 5, 5));
         emojiPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // 텍스트 이모티콘 배열 (한글과 호환되는 형식)
         String[][] emoticons = {
                 {"^_^", "웃음"},
                 {"ㅋㅋㅋ", "크크크"},
@@ -585,7 +907,7 @@ public class JavaChatClientView extends JFrame {
         try {
             dos.writeUTF(msg);
         } catch (IOException e) {
-            appendText("메시지 전송 실패");
+            appendSystemMessage("메시지 전송 실패");
             e.printStackTrace();
         }
     }
@@ -623,31 +945,49 @@ public class JavaChatClientView extends JFrame {
         if (btnColorPicker != null) btnColorPicker.setEnabled(canInteract);
         if (btnEraserTool != null) btnEraserTool.setEnabled(canInteract);
         if (btnClearAll != null) btnClearAll.setEnabled(canInteract);
-
-//        if (isMyTurn) {
-//            appendText("[시스템] ⭐ 당신의 턴입니다! 15초 동안 그려주세요!");
-//        }
-    }
-
-    private void appendText(String msg) {
-        textArea.append(msg + "\n");
-        textArea.setCaretPosition(textArea.getText().length());
     }
 
     private void updatePlayerList(java.util.List<String> players) {
         SwingUtilities.invokeLater(() -> {
+            // [추천 사이즈] 너비 180, 높이 50
+            int imgWidth = 180;
+            int imgHeight = 50;
+
             for (int i = 0; i < 4; i++) {
+                // 텍스트 중앙 정렬 및 투명화 초기화
+                playerLabels[i].setHorizontalTextPosition(JLabel.CENTER);
+                playerLabels[i].setVerticalTextPosition(JLabel.CENTER);
+                playerLabels[i].setOpaque(false);
+
                 if (i < players.size()) {
                     String playerName = players.get(i);
                     playerLabels[i].setText(playerName);
-                    playerLabels[i].setBackground(new Color(180, 220, 255));
 
                     if (playerName.equals(currentRoom.getHostName())) {
                         playerLabels[i].setText("👑 " + playerName);
                     }
+
+                    // [이미지 적용] 접속한 플레이어
+                    ImageIcon playerIcon = resizeIcon("/game/player.png", imgWidth, imgHeight);
+                    if (playerIcon != null) {
+                        playerLabels[i].setIcon(playerIcon);
+                    } else {
+                        playerLabels[i].setOpaque(true);
+                        playerLabels[i].setBackground(new Color(180, 220, 255));
+                        playerLabels[i].setIcon(null);
+                    }
                 } else {
                     playerLabels[i].setText("대기 중...");
-                    playerLabels[i].setBackground(new Color(230, 230, 230));
+
+                    // [이미지 적용] 대기 중
+                    ImageIcon waitingIcon = resizeIcon("/game/waiting.png", imgWidth, imgHeight);
+                    if (waitingIcon != null) {
+                        playerLabels[i].setIcon(waitingIcon);
+                    } else {
+                        playerLabels[i].setOpaque(true);
+                        playerLabels[i].setBackground(new Color(230, 230, 230));
+                        playerLabels[i].setIcon(null);
+                    }
                 }
             }
 
@@ -671,6 +1011,20 @@ public class JavaChatClientView extends JFrame {
             while (isRunning) {
                 try {
                     String msg = dis.readUTF();
+                    if(msg.startsWith("/updatePlayerList")) {
+                        String playerStr = msg.substring(18);
+                        String [] players = playerStr.split(",");
+
+                        currentRoom.getPlayers().clear();
+
+                        List<String> newPlayerList = new ArrayList<>();
+                        for(String p : players){
+                            if(!p.trim().isEmpty()){
+                                newPlayerList.add(p);
+                            }
+                        }
+                        updatePlayerList(newPlayerList);
+                    }
 
                     if (msg.startsWith("/gameStart ")) {
                         String[] parts = msg.substring(11).split("\\|");
@@ -679,17 +1033,18 @@ public class JavaChatClientView extends JFrame {
                             String info = parts[1];
 
                             SwingUtilities.invokeLater(() -> {
+                                if(btnLeaveRoom != null){
+                                    btnLeaveRoom.setEnabled(false);
+                                }
                                 if (role.equals("LIAR")) {
                                     isLiar = true;
                                     myKeyword = info;
 
-                                    // 커스텀 다이얼로그 생성
                                     JDialog dialog = new JDialog(JavaChatClientView.this, true);
                                     dialog.setSize(462, 432);
                                     dialog.setLocationRelativeTo(JavaChatClientView.this);
                                     dialog.setResizable(false);
 
-                                    // ⭐ 배경 이미지가 있는 커스텀 패널
                                     JPanel panel = new JPanel(new BorderLayout(10, 10)) {
                                         Image bgImage = null;
                                         {
@@ -711,7 +1066,6 @@ public class JavaChatClientView extends JFrame {
                                     panel.setOpaque(false);
                                     panel.setBorder(new EmptyBorder(30, 30, 30, 30));
 
-                                    // ⭐ 카테고리 정보만 오른쪽 하단에 표시
                                     JLabel messageLabel = new JLabel(
                                             "<html><div style='text-align: right;'>" +
                                                     "카테고리: " + info +
@@ -721,14 +1075,12 @@ public class JavaChatClientView extends JFrame {
                                     messageLabel.setHorizontalAlignment(SwingConstants.RIGHT);
                                     messageLabel.setOpaque(false);
 
-                                    // ⭐ 확인 버튼을 이미지로 대체
                                     JButton okButton = new JButton();
                                     try {
                                         ImageIcon icon = new ImageIcon(getClass().getResource("/info/check.png"));
                                         Image img = icon.getImage().getScaledInstance(120, 40, Image.SCALE_SMOOTH);
                                         okButton.setIcon(new ImageIcon(img));
 
-                                        // 이미지 버튼 스타일
                                         okButton.setBorderPainted(false);
                                         okButton.setContentAreaFilled(false);
                                         okButton.setFocusPainted(false);
@@ -745,10 +1097,9 @@ public class JavaChatClientView extends JFrame {
                                     buttonPanel.setOpaque(false);
                                     buttonPanel.add(okButton);
 
-                                    // ⭐ 하단 패널 구성 (메시지 + 버튼)
                                     JPanel bottomPanel = new JPanel(new BorderLayout());
                                     bottomPanel.setOpaque(false);
-                                    bottomPanel.add(messageLabel, BorderLayout.EAST); // 오른쪽에 배치
+                                    bottomPanel.add(messageLabel, BorderLayout.EAST);
                                     bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
 
                                     panel.add(bottomPanel, BorderLayout.SOUTH);
@@ -765,7 +1116,6 @@ public class JavaChatClientView extends JFrame {
                                     dialog.setLocationRelativeTo(JavaChatClientView.this);
                                     dialog.setResizable(false);
 
-                                    // ⭐ 배경 이미지가 있는 커스텀 패널
                                     JPanel panel = new JPanel(new BorderLayout(10, 10)) {
                                         Image bgImage = null;
                                         {
@@ -787,7 +1137,6 @@ public class JavaChatClientView extends JFrame {
                                     panel.setOpaque(false);
                                     panel.setBorder(new EmptyBorder(30, 30, 30, 30));
 
-                                    // ⭐ 키워드 정보만 오른쪽 하단에 표시
                                     JLabel messageLabel = new JLabel(
                                             "<html><div style='text-align: right;'>" +
                                                     "키워드: " + info +
@@ -797,14 +1146,12 @@ public class JavaChatClientView extends JFrame {
                                     messageLabel.setHorizontalAlignment(SwingConstants.RIGHT);
                                     messageLabel.setOpaque(false);
 
-                                    // ⭐ 확인 버튼을 이미지로 대체
                                     JButton okButton = new JButton();
                                     try {
                                         ImageIcon icon = new ImageIcon(getClass().getResource("/info/check2.png"));
                                         Image img = icon.getImage().getScaledInstance(120, 40, Image.SCALE_SMOOTH);
                                         okButton.setIcon(new ImageIcon(img));
 
-                                        // 이미지 버튼 스타일
                                         okButton.setBorderPainted(false);
                                         okButton.setContentAreaFilled(false);
                                         okButton.setFocusPainted(false);
@@ -821,10 +1168,9 @@ public class JavaChatClientView extends JFrame {
                                     buttonPanel.setOpaque(false);
                                     buttonPanel.add(okButton);
 
-                                    // ⭐ 하단 패널 구성 (메시지 + 버튼)
                                     JPanel bottomPanel = new JPanel(new BorderLayout());
                                     bottomPanel.setOpaque(false);
-                                    bottomPanel.add(messageLabel, BorderLayout.EAST); // 오른쪽에 배치
+                                    bottomPanel.add(messageLabel, BorderLayout.EAST);
                                     bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
 
                                     panel.add(bottomPanel, BorderLayout.SOUTH);
@@ -833,7 +1179,7 @@ public class JavaChatClientView extends JFrame {
                                     dialog.setVisible(true);
                                 }
 
-                                appendText("===== 게임이 시작되었습니다! =====");
+                                appendSystemMessage("===== 게임이 시작되었습니다! =====");
                                 btnStartGame.setEnabled(false);
                                 btnStartGame.setText("게임 진행 중");
                                 btnStartGame.setBackground(Color.GRAY);
@@ -856,7 +1202,7 @@ public class JavaChatClientView extends JFrame {
                         isRunning = false;
 
                         SwingUtilities.invokeLater(() -> {
-                            appendText("===== 게임이 종료되었습니다! 투표를 시작합니다. =====");
+                            appendSystemMessage("===== 게임이 종료되었습니다! 투표를 시작합니다. =====");
                             openVotingUI();
                         });
 
@@ -865,13 +1211,13 @@ public class JavaChatClientView extends JFrame {
                     else if (msg.startsWith("/playerJoined ")) {
                         String newPlayer = msg.substring(14);
                         currentRoom.addPlayer(newPlayer);
-                        appendText("[입장] " + newPlayer + "님이 입장했습니다.");
+                        appendSystemMessage("[입장] " + newPlayer + "님이 입장했습니다.");
                         updatePlayerList(currentRoom.getPlayers());
                     }
                     else if (msg.startsWith("/playerLeft ")) {
                         String leftPlayer = msg.substring(12);
                         currentRoom.removePlayer(leftPlayer);
-                        appendText("[퇴장] " + leftPlayer + "님이 퇴장했습니다.");
+                        appendSystemMessage("[퇴장] " + leftPlayer + "님이 퇴장했습니다.");
                         updatePlayerList(currentRoom.getPlayers());
                     }
                     else if (msg.startsWith("/draw ")) {
@@ -885,7 +1231,7 @@ public class JavaChatClientView extends JFrame {
                     }
                 } catch (IOException e) {
                     if(isRunning){
-                        appendText("서버와의 연결이 끊어졌습니다.");
+                        appendSystemMessage("서버와의 연결이 끊어졌습니다.");
                     }
                     break;
                 }
@@ -1002,6 +1348,255 @@ public class JavaChatClientView extends JFrame {
                 prevY = y;
                 repaint();
             }
+        }
+    }
+
+    /**
+     * 카카오톡 스타일 둥근 말풍선 패널
+     */
+    static class RoundedBubblePanel extends JPanel {
+        private Color backgroundColor;
+        private boolean isRight;
+        private static final int RADIUS = 20;
+        private static final int TAIL_SIZE = 18; // 꼬리 크기 증가
+
+        public RoundedBubblePanel(Color backgroundColor, boolean isRight) {
+            this.backgroundColor = backgroundColor;
+            this.isRight = isRight;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int width = getWidth();
+            int height = getHeight();
+
+            g2.setColor(backgroundColor);
+
+            if (isRight) {
+                // 오른쪽 말풍선 (내 메시지)
+                g2.fillRoundRect(0, 0, width - TAIL_SIZE, height, RADIUS, RADIUS);
+
+                // 꼬리 그리기 (오른쪽 하단) - 더 크고 명확하게
+                int[] xPoints = {width - TAIL_SIZE, width - 2, width - TAIL_SIZE};
+                int[] yPoints = {height - 25, height - 3, height - 8};
+                g2.fillPolygon(xPoints, yPoints, 3);
+            } else {
+                // 왼쪽 말풍선 (상대 메시지)
+                g2.fillRoundRect(TAIL_SIZE, 0, width - TAIL_SIZE, height, RADIUS, RADIUS);
+
+                // 꼬리 그리기 (왼쪽 하단) - 더 크고 명확하게
+                int[] xPoints = {TAIL_SIZE, 2, TAIL_SIZE};
+                int[] yPoints = {height - 25, height - 3, height - 8};
+                g2.fillPolygon(xPoints, yPoints, 3);
+            }
+
+            g2.dispose();
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            Dimension size = super.getPreferredSize();
+            size.width += TAIL_SIZE;
+            return size;
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            Dimension size = super.getMaximumSize();
+            size.width = Math.min(size.width, 140); // 최대 너비 제한 (줄임)
+            return size;
+        }
+    }
+
+    /**
+     * 둥근 모서리 Border 클래스
+     */
+    /**
+     * 그림자가 있는 둥근 모서리 Border 클래스
+     */
+    static class RoundedBorder implements javax.swing.border.Border {
+        private int radius;
+        private Color backgroundColor;
+
+        RoundedBorder(int radius, Color backgroundColor) {
+            this.radius = radius;
+            this.backgroundColor = backgroundColor;
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(this.radius/2 + 2, this.radius/2 + 2, this.radius/2 + 4, this.radius/2 + 4);
+        }
+
+        @Override
+        public boolean isBorderOpaque() {
+            return false;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // ✅ 그림자 효과
+            g2.setColor(new Color(0, 0, 0, 30));
+            g2.fillRoundRect(x + 2, y + 2, width - 3, height - 3, radius, radius);
+
+            // 말풍선 배경
+            g2.setColor(backgroundColor);
+            g2.fillRoundRect(x, y, width - 4, height - 4, radius, radius);
+
+            g2.dispose();
+        }
+    }
+
+    /**
+     * 카카오톡 스타일 꼬리가 있는 말풍선 Border
+     */
+    static class SpeechBubbleBorder implements javax.swing.border.Border {
+        private int radius;
+        private Color backgroundColor;
+        private boolean isRight; // 오른쪽 말풍선인지
+        private static final int TAIL_SIZE = 12; // 꼬리 크기
+
+        SpeechBubbleBorder(int radius, Color backgroundColor, boolean isRight) {
+            this.radius = radius;
+            this.backgroundColor = backgroundColor;
+            this.isRight = isRight;
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            if (isRight) {
+                return new Insets(radius/2, radius/2, radius/2, radius/2 + TAIL_SIZE);
+            } else {
+                return new Insets(radius/2, radius/2 + TAIL_SIZE, radius/2, radius/2);
+            }
+        }
+
+        @Override
+        public boolean isBorderOpaque() {
+            return false;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            g2.setColor(backgroundColor);
+
+            if (isRight) {
+                // 오른쪽 말풍선 (내 메시지) - 카카오톡 스타일
+                g2.fillRoundRect(x, y, width - TAIL_SIZE, height, radius, radius);
+
+                // 꼬리 그리기 (오른쪽 하단)
+                int[] xPoints = {width - TAIL_SIZE, width - 2, width - TAIL_SIZE};
+                int[] yPoints = {height - 20, height - 5, height - 10};
+                g2.fillPolygon(xPoints, yPoints, 3);
+            } else {
+                // 왼쪽 말풍선 (상대 메시지) - 카카오톡 스타일
+                g2.fillRoundRect(x + TAIL_SIZE, y, width - TAIL_SIZE, height, radius, radius);
+
+                // 꼬리 그리기 (왼쪽 하단)
+                int[] xPoints = {TAIL_SIZE, 2, TAIL_SIZE};
+                int[] yPoints = {height - 20, height - 5, height - 10};
+                g2.fillPolygon(xPoints, yPoints, 3);
+            }
+
+            g2.dispose();
+        }
+    }
+
+    /**
+     * 둥근 텍스트 입력창 클래스
+     */
+    static class RoundedTextField extends JTextField {
+        private int radius;
+
+        public RoundedTextField(int radius) {
+            super();
+            this.radius = radius;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // 배경 그리기
+            g2.setColor(getBackground());
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, radius, radius);
+
+            // 테두리 그리기
+            g2.setColor(new Color(220, 220, 220));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, radius, radius);
+
+            g2.dispose();
+
+            super.paintComponent(g);
+        }
+    }
+
+    /**
+     * 둥근 입력창 Border 클래스
+     */
+    static class RoundedInputBorder implements javax.swing.border.Border {
+        private int radius;
+        private Color borderColor;
+
+        RoundedInputBorder(int radius, Color borderColor) {
+            this.radius = radius;
+            this.borderColor = borderColor;
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(radius/2, radius/2, radius/2, radius/2);
+        }
+
+        @Override
+        public boolean isBorderOpaque() {
+            return false;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // 배경 그리기
+            g2.setColor(new Color(250, 250, 250));
+            g2.fillRoundRect(x, y, width - 1, height - 1, radius, radius);
+
+            // 테두리 그리기
+            g2.setColor(borderColor);
+            g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+
+            g2.dispose();
+        }
+    }
+
+    private ImageIcon resizeIcon(String path, int width, int height) {
+        try {
+            java.net.URL imgURL = getClass().getResource(path);
+            if (imgURL != null) {
+                ImageIcon icon = new ImageIcon(imgURL);
+                Image img = icon.getImage().getScaledInstance(width, height, Image.SCALE_SMOOTH);
+                return new ImageIcon(img);
+            } else {
+                System.err.println("이미지를 찾을 수 없음: " + path);
+                return null;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
     }
 }

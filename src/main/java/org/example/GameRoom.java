@@ -34,8 +34,8 @@ public class GameRoom {
     private boolean votingPhase = false;
 
     // 게임 설정
-    private static final int TURN_TIME_SECONDS = 15;
-    private static final int MAX_ROUNDS = 4;
+    private static final int TURN_TIME_SECONDS = 2;
+    private static final int MAX_ROUNDS = 1;
     private static final int REQUIRED_PLAYERS = 4;
 
     private int remainingSeconds;

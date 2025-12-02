@@ -355,7 +355,7 @@ public class DrawServer extends JFrame {
                 e.printStackTrace();
             }
         }
-
+    
         public void run() {
             try {
                 String firstMsg = dis.readUTF();

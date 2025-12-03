@@ -287,4 +287,9 @@ public class GameRoom {
     public Map<String, Boolean> getPlayerRoles() { return new HashMap<>(playerRoles); }
     public boolean isVotingPhase() { return votingPhase; }
     public Map<String, String> getVotes() { return new HashMap<>(votes); }
+
+    // ★★★ [추가] 방장 변경을 위한 Setter ★★★
+    public void setHostName(String hostName) {
+        this.hostName = hostName;
+    }
 }

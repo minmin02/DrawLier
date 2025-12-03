@@ -6,10 +6,13 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.io.*;
 import java.net.Socket;
+import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 public class JavaChatClientView extends JFrame {
 
@@ -31,6 +34,7 @@ public class JavaChatClientView extends JFrame {
     private JLabel lblTimer;
     private JLabel lblCurrentTurn;
     private JPanel playerPanel;
+    private JLabel lblHostName;
 
     private String userName;
     private GameRoom currentRoom;
@@ -53,6 +57,8 @@ public class JavaChatClientView extends JFrame {
     private boolean isLiar;
     private String myKeyword;
 
+    private Map<String, ImageIcon> emojiMap;
+
 
     public JavaChatClientView(String userName, Socket socket, DataInputStream dis,
                               DataOutputStream dos, GameRoom room, boolean isHost, String serverIp, String serverPort) {
@@ -65,6 +71,7 @@ public class JavaChatClientView extends JFrame {
         this.serverIp = serverIp;
         this.serverPort = serverPort;
 
+        loadEmojis();
         initializeUI();
         new ListenNetwork().start();
 
@@ -72,6 +79,33 @@ public class JavaChatClientView extends JFrame {
             updatePlayerList(currentRoom.getPlayers());
         });
     }
+
+    private void loadEmojis() {
+        emojiMap = new HashMap<>();
+        String path = "/Imoji";
+        URL dirURL = getClass().getResource(path);
+        if (dirURL != null && dirURL.getProtocol().equals("file")) {
+            try {
+                File[] files = new File(dirURL.toURI()).listFiles();
+                if (files != null) {
+                    for (File file : files) {
+                        String fileName = file.getName();
+                        if (fileName.toLowerCase().endsWith(".png") || fileName.toLowerCase().endsWith(".gif")) {
+                            String emojiKey = fileName.substring(0, fileName.lastIndexOf('.'));
+                            ImageIcon icon = new ImageIcon(file.toURI().toURL());
+                            Image scaledImage = icon.getImage().getScaledInstance(32, 32, Image.SCALE_SMOOTH);
+                            emojiMap.put(emojiKey, new ImageIcon(scaledImage));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+             System.err.println("이모티콘 디렉토리를 찾을 수 없습니다: " + path);
+        }
+    }
+
 
     private void initializeUI() {
         setTitle("DrawLier - " + currentRoom.getRoomName() + " [" + userName + "]");
@@ -156,7 +190,6 @@ public class JavaChatClientView extends JFrame {
         ImageIcon exitIcon = resizeIcon("/game/exit.png", 80, 30);
         if (exitIcon != null) {
             btnLeaveRoom.setIcon(exitIcon);
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btnLeaveRoom);
         } else {
             btnLeaveRoom.setText("나가기");
@@ -199,7 +232,6 @@ public class JavaChatClientView extends JFrame {
         ImageIcon colorIcon = resizeIcon("/game/color.png", 100, 30);
         if (colorIcon != null) {
             btnColorPicker.setIcon(colorIcon);
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btnColorPicker);
         } else {
             btnColorPicker.setText("색상 선택");
@@ -228,7 +260,6 @@ public class JavaChatClientView extends JFrame {
         ImageIcon eraseIcon = resizeIcon("/game/erase.png", 80, 30);
         if (eraseIcon != null) {
             btnEraserTool.setIcon(eraseIcon);
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btnEraserTool);
         } else {
             btnEraserTool.setText("지우개");
@@ -249,7 +280,6 @@ public class JavaChatClientView extends JFrame {
         ImageIcon allEraseIcon = resizeIcon("/game/allerase.png", 100, 30);
         if (allEraseIcon != null) {
             btnClearAll.setIcon(allEraseIcon);
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btnClearAll);
         } else {
             btnClearAll.setText("전체 지우기");
@@ -273,19 +303,20 @@ public class JavaChatClientView extends JFrame {
     }
 
     private void leaveRoom() {
-        try{
-            if(dos != null){
+        try {
+            if (dos != null) {
                 dos.writeUTF("/leaveRoom");
             }
             isRunning = false;
             SwingUtilities.invokeLater(() -> {
-                new RoomListUI(userName, serverIp, serverPort).setVisible(true);
+                new RoomListUI(userName, serverIp, serverPort, socket, dis, dos).setVisible(true);
                 dispose();
             });
-        }catch(IOException ex){
+        } catch (IOException ex) {
             ex.printStackTrace();
         }
     }
+
 
     private JPanel createTopPanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -331,7 +362,7 @@ public class JavaChatClientView extends JFrame {
         lblHostIcon.setOpaque(false);
         leftInfoPanel.add(lblHostIcon);
 
-        JLabel lblHostName = new JLabel(": " + currentRoom.getHostName());
+        lblHostName = new JLabel(": " + currentRoom.getHostName());
         lblHostName.setFont(new Font("맑은 고딕", Font.BOLD, 16));
         lblHostName.setOpaque(false);
         leftInfoPanel.add(lblHostName);
@@ -403,7 +434,6 @@ public class JavaChatClientView extends JFrame {
         ImageIcon sendIcon = resizeIcon("/game/send.png", 70, 36);
         if (sendIcon != null) {
             btnSend.setIcon(sendIcon);
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btnSend);
         } else {
             btnSend.setText("전송");
@@ -489,6 +519,10 @@ public class JavaChatClientView extends JFrame {
             bubble.setLayout(new BoxLayout(bubble, BoxLayout.Y_AXIS));
             bubble.setOpaque(false);
 
+            // ★★★ [수정] 말풍선 최대 너비 제한 ★★★
+            bubble.setMaximumSize(new Dimension(250, Short.MAX_VALUE));
+
+
             int tailSize = 18;
             if (isMyMessage) {
                 bubble.setBorder(new EmptyBorder(8, 12, 8, 12 + tailSize));
@@ -505,17 +539,25 @@ public class JavaChatClientView extends JFrame {
                 bubble.add(Box.createVerticalStrut(2));
             }
 
-            JTextArea msgArea = new JTextArea(message);
-            msgArea.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
-            msgArea.setForeground(isMyMessage ? new Color(40, 40, 40) : Color.BLACK);
-            msgArea.setOpaque(false);
-            msgArea.setEditable(false);
-            msgArea.setLineWrap(true);
-            msgArea.setWrapStyleWord(true);
-            msgArea.setBorder(null);
-            msgArea.setColumns(18);
-            msgArea.setAlignmentX(Component.LEFT_ALIGNMENT);
-            bubble.add(msgArea);
+            if (message.startsWith("/emoji ")) {
+                String emojiKey = message.substring(7).trim();
+                if (emojiMap.containsKey(emojiKey)) {
+                    JLabel emojiLabel = new JLabel(emojiMap.get(emojiKey));
+                    bubble.add(emojiLabel);
+                }
+            } else {
+                JTextArea msgArea = new JTextArea(message);
+                msgArea.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
+                msgArea.setForeground(isMyMessage ? new Color(40, 40, 40) : Color.BLACK);
+                msgArea.setOpaque(false);
+                msgArea.setEditable(false);
+                msgArea.setLineWrap(true);
+                msgArea.setWrapStyleWord(true);
+                msgArea.setBorder(null);
+                // msgArea.setColumns(18); // 더 이상 필요 없음
+                msgArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+                bubble.add(msgArea);
+            }
 
             JLabel timeLabel = new JLabel(getCurrentTime());
             timeLabel.setFont(new Font("맑은 고딕", Font.PLAIN, 9));
@@ -539,34 +581,6 @@ public class JavaChatClientView extends JFrame {
 
             scrollToBottom();
         });
-    }
-
-    private String wrapText(String text, int maxLineLength) {
-        if (text.length() <= maxLineLength) {
-            return text;
-        }
-
-        StringBuilder wrapped = new StringBuilder();
-        int start = 0;
-
-        while (start < text.length()) {
-            int end = Math.min(start + maxLineLength, text.length());
-
-            if (end < text.length()) {
-                int lastSpace = text.lastIndexOf(' ', end);
-                if (lastSpace > start) {
-                    end = lastSpace;
-                }
-            }
-
-            wrapped.append(text.substring(start, end).trim());
-            if (end < text.length()) {
-                wrapped.append("\n");
-            }
-            start = end + 1;
-        }
-
-        return wrapped.toString();
     }
 
     private void scrollToBottom() {
@@ -712,42 +726,36 @@ public class JavaChatClientView extends JFrame {
         emojiDialog.setSize(450, 350);
         emojiDialog.setLocationRelativeTo(this);
 
-        JPanel emojiPanel = new JPanel(new GridLayout(8, 6, 5, 5));
+        JPanel emojiPanel = new JPanel(new GridLayout(0, 6, 5, 5));
         emojiPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        String[][] emoticons = {
-                {"^_^", "웃음"}, {"ㅋㅋㅋ", "크크크"}, {"ㅎㅎㅎ", "하하하"}, {"ㅠㅠ", "슬픔"}, {"ㅜㅜ", "울음"}, {"^^", "미소"},
-                {"^o^", "신남"}, {"T_T", "눈물"}, {">_<", "화남"}, {"O_O", "놀람"}, {"-_-", "무표정"}, {"@_@", "어지러움"},
-                {"*_*", "반짝"}, {"♥", "하트"}, {"★", "별"}, {"♪", "음표"}, {"(~_~)", "졸림"}, {"(^3^)", "뽀뽀"},
-                {"(>_<)", "아픔"}, {"(=^ω^=)", "고양이"}, {"(╯°□°）╯", "뒤집기"}, {"¯\\_(ツ)_/¯", "모르겠음"}, {"(ಠ_ಠ)", "째려봄"},
-                {"(✿◠‿◠)", "행복"}, {"(づ｡◕‿‿◕｡)づ", "포옹"}, {"(ノ^_^)ノ", "축하"}, {"ヽ(°〇°)ﾉ", "당황"}, {"(｡♥‿♥｡)", "사랑"},
-                {"(ง'̀-'́)ง", "파이팅"}, {"(◕‿◕)", "귀여움"}, {"(⌐■_■)", "쿨함"}, {"(╥_╥)", "흑흑"}, {"(ノಠ益ಠ)ノ", "분노"},
-                {"(づ￣ ³￣)づ", "뽀뽀2"}, {"(•‿•)", "윙크"}, {"(⊙_⊙)", "응?"}, {"ㄱㅅ", "감사"}, {"ㅊㅋ", "축하"},
-                {"ㅅㄱ", "수고"}, {"ㄳ", "감사2"}, {"굿", "좋아요"}, {"오키", "OK"}, {"ㅇㅋ", "OK2"}, {"ㄴㄴ", "노노"},
-                {"ㅇㅇ", "응응"}, {"ㄹㅇ", "리얼"}, {"헐", "놀람2"}, {"대박", "대박"}
-        };
+        if (emojiMap.isEmpty()) {
+            emojiPanel.add(new JLabel("이모티콘을 불러올 수 없습니다."));
+        } else {
+            for (Map.Entry<String, ImageIcon> entry : emojiMap.entrySet()) {
+                String emojiKey = entry.getKey();
+                ImageIcon emojiIcon = entry.getValue();
 
-        Font emoticonFont = new Font("맑은 고딕", Font.PLAIN, 16);
+                JButton btnEmoticon = new JButton(emojiIcon);
+                btnEmoticon.setToolTipText(emojiKey);
+                btnEmoticon.setBorder(BorderFactory.createEmptyBorder());
+                btnEmoticon.setContentAreaFilled(false);
+                btnEmoticon.setFocusPainted(false);
+                btnEmoticon.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-        for (String[] emoticon : emoticons) {
-            String symbol = emoticon[0];
-            String label = emoticon[1];
-
-            JButton btnEmoticon = new JButton("<html><center>" + symbol + "<br><small>" + label + "</small></center></html>");
-            btnEmoticon.setFont(emoticonFont);
-            btnEmoticon.setFocusPainted(false);
-            btnEmoticon.setToolTipText(label);
-            btnEmoticon.addActionListener(e -> {
-                txtInput.setText(txtInput.getText() + symbol + " ");
-                emojiDialog.dispose();
-            });
-            emojiPanel.add(btnEmoticon);
+                btnEmoticon.addActionListener(e -> {
+                    sendProtocol(userName + ": /emoji " + emojiKey);
+                    emojiDialog.dispose();
+                });
+                emojiPanel.add(btnEmoticon);
+            }
         }
 
         JScrollPane scrollPane = new JScrollPane(emojiPanel);
         emojiDialog.add(scrollPane);
         emojiDialog.setVisible(true);
     }
+
 
     private void sendProtocol(String msg) {
         try {
@@ -841,10 +849,11 @@ public class JavaChatClientView extends JFrame {
     private void openVotingUI() {
         SwingUtilities.invokeLater(() -> {
             List<String> players = currentRoom.getPlayers();
-            new VotingUI(userName, players, dos, dis, currentRoom.getRoomId(), serverIp, serverPort);
+            new VotingUI(userName, players, currentRoom.getRoomId(), serverIp, serverPort, socket, dis, dos);
             dispose();
         });
     }
+
 
     class ListenNetwork extends Thread {
         public void run() {
@@ -1051,6 +1060,17 @@ public class JavaChatClientView extends JFrame {
                         currentRoom.removePlayer(leftPlayer);
                         appendSystemMessage("[퇴장] " + leftPlayer + "님이 퇴장했습니다.");
                         updatePlayerList(currentRoom.getPlayers());
+                    }
+                    else if (msg.startsWith("/hostChanged ")) {
+                        String newHostName = msg.substring(13);
+                        SwingUtilities.invokeLater(() -> {
+                            currentRoom.setHostName(newHostName);
+                            isHost = userName.equals(newHostName);
+                            appendSystemMessage("[시스템] 방장이 " + newHostName + "님으로 변경되었습니다.");
+                            lblHostName.setText(": " + newHostName);
+                            updatePlayerList(currentRoom.getPlayers());
+                            updateStartButtonState();
+                        });
                     }
                     else if (msg.startsWith("/draw ")) {
                         drawingPanel.processDrawCommand(msg);

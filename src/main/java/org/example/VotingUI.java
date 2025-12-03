@@ -6,37 +6,37 @@ import java.awt.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.Socket;
 import java.net.URL;
 import java.util.List;
 
-/**
- * 투표 UI - 수정됨
- * 1. 상단 제목 패널 제거
- * 2. 배경화면을 /PlayUI/Voting.png 이미지로 변경
- */
 public class VotingUI extends JFrame {
     private String userName;
     private List<String> players;
-    private DataOutputStream dos;
-    private DataInputStream dis;
     private String roomId;
     private String serverIp;
     private String serverPort;
 
-    // lblTitle 제거됨
+    // ★★★ [추가] 소켓 및 스트림 필드
+    private Socket socket;
+    private DataInputStream dis;
+    private DataOutputStream dos;
+
     private JPanel votingPanel;
     private JButton[] voteButtons;
     private String selectedPlayer;
     private boolean hasVoted = false;
 
-    public VotingUI(String userName, List<String> players, DataOutputStream dos, DataInputStream dis, String roomId, String serverIp, String serverPort) {
+    // ★★★ [수정] 생성자에서 소켓과 스트림을 받도록 변경
+    public VotingUI(String userName, List<String> players, String roomId, String serverIp, String serverPort, Socket socket, DataInputStream dis, DataOutputStream dos) {
         this.userName = userName;
         this.players = players;
-        this.dos = dos;
-        this.dis = dis;
         this.roomId = roomId;
         this.serverIp = serverIp;
         this.serverPort = serverPort;
+        this.socket = socket;
+        this.dis = dis;
+        this.dos = dos;
 
         initializeUI();
         new ListenVoteResult().start();
@@ -47,7 +47,6 @@ public class VotingUI extends JFrame {
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setBounds(100, 100, 600, 500);
 
-        // 배경 이미지를 그리는 패널로 교체
         JPanel contentPane = new JPanel() {
             private Image bgImage;
             {
@@ -75,10 +74,9 @@ public class VotingUI extends JFrame {
         contentPane.setLayout(new BorderLayout(10, 10));
         setContentPane(contentPane);
 
-        // 중앙 투표 패널
         votingPanel = new JPanel();
         votingPanel.setLayout(new GridLayout(2, 2, 20, 20));
-        votingPanel.setOpaque(false); // 배경 투명화
+        votingPanel.setOpaque(false);
         votingPanel.setBorder(new EmptyBorder(70, 50, 30, 50));
 
         voteButtons = new JButton[players.size()];
@@ -151,9 +149,8 @@ public class VotingUI extends JFrame {
 
         contentPane.add(votingPanel, BorderLayout.CENTER);
 
-        // 하단 확인 버튼
         JPanel bottomPanel = new JPanel();
-        bottomPanel.setOpaque(false); // 배경 투명화
+        bottomPanel.setOpaque(false);
         bottomPanel.setBorder(new EmptyBorder(10, 0, 20, 0));
 
         JButton btnConfirm = new JButton();
@@ -165,7 +162,6 @@ public class VotingUI extends JFrame {
                 ImageIcon icon = new ImageIcon(btnUrl);
                 Image img = icon.getImage().getScaledInstance(100, 30, Image.SCALE_SMOOTH);
                 btnConfirm.setIcon(new ImageIcon(img));
-                // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
                 UIUtils.applyButtonEffects(btnConfirm);
             } else {
                 btnConfirm.setText("투표하기");
@@ -204,8 +200,6 @@ public class VotingUI extends JFrame {
                 new EmptyBorder(10, 10, 10, 10)
         ));
     }
-
-    // ★★★ [삭제] applyButtonEffects 메소드 제거 ★★★
 
     private void submitVote() {
         if (hasVoted) {
@@ -246,7 +240,8 @@ public class VotingUI extends JFrame {
                         SwingUtilities.invokeLater(() -> {
                             if (isLiar) {
                                 if (userName.equals(mostVoted)) {
-                                    new InsertAnswerUI(userName, dos, dis, roomId, serverIp, serverPort);
+                                    // ★★★ [수정] InsertAnswerUI 생성자에 소켓과 스트림 전달
+                                    new InsertAnswerUI(userName, roomId, serverIp, serverPort, socket, dis, dos);
                                     dispose();
                                 } else {
                                     JPanel fullWaitPanel = new JPanel() {
@@ -275,7 +270,8 @@ public class VotingUI extends JFrame {
                                     repaint();
                                 }
                             } else {
-                                new ResultUI(userName, false, mostVoted + "님이 억울하게 투표되었습니다!\n실제 라이어는 다른 플레이어였습니다.\n", dos, roomId, serverIp, serverPort);
+                                // ★★★ [수정] ResultUI 생성자에 소켓과 스트림 전달
+                                new ResultUI(userName, false, mostVoted + "님이 억울하게 투표되었습니다!\n실제 라이어는 다른 플레이어였습니다.\n", roomId, serverIp, serverPort, socket, dis, dos);
                                 dispose();
                             }
                         });
@@ -289,7 +285,8 @@ public class VotingUI extends JFrame {
                         String message = parts[2];
 
                         SwingUtilities.invokeLater(() -> {
-                            new ResultUI(userName, citizenWin, message, dos, roomId, serverIp, serverPort);
+                            // ★★★ [수정] ResultUI 생성자에 소켓과 스트림 전달
+                            new ResultUI(userName, citizenWin, message, roomId, serverIp, serverPort, socket, dis, dos);
                             dispose();
                         });
                         break;

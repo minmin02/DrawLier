@@ -33,6 +33,7 @@ public class RoomListUI extends JFrame {
 
     private boolean isRunning = true;
 
+    // 로그인 시 사용하는 생성자
     public RoomListUI(String userName, String serverIp, String serverPort) {
         this.userName = userName;
         this.serverIp = serverIp;
@@ -44,13 +45,28 @@ public class RoomListUI extends JFrame {
         requestRoomList();
     }
 
+    // ★★★ [추가] 게임 방에서 로비로 돌아올 때 사용하는 생성자 ★★★
+    public RoomListUI(String userName, String serverIp, String serverPort, Socket socket, DataInputStream dis, DataOutputStream dos) {
+        this.userName = userName;
+        this.serverIp = serverIp;
+        this.serverPort = serverPort;
+        this.socket = socket;
+        this.dis = dis;
+        this.dos = dos;
+        this.roomMap = new HashMap<>();
+
+        // 서버에 다시 연결하거나 로그인할 필요 없음
+        new ListenNetwork().start();
+        initializeUI();
+        requestRoomList();
+    }
+
+
     private void connectToServer() {
         try {
             socket = new Socket(serverIp, Integer.parseInt(serverPort));
-            InputStream is = socket.getInputStream();
-            dis = new DataInputStream(is);
-            OutputStream os = socket.getOutputStream();
-            dos = new DataOutputStream(os);
+            dis = new DataInputStream(socket.getInputStream());
+            dos = new DataOutputStream(socket.getOutputStream());
 
             dos.writeUTF("/login " + userName);
             String response = dis.readUTF();
@@ -86,7 +102,6 @@ public class RoomListUI extends JFrame {
             btn.setIcon(new ImageIcon(img));
             btn.setPreferredSize(new Dimension(BTN_WIDTH, BTN_HEIGHT));
 
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btn);
 
         } catch (Exception e) {
@@ -321,7 +336,6 @@ public class RoomListUI extends JFrame {
             ImageIcon icon = new ImageIcon(getClass().getResource("/RoomList/createBtn.png"));
             Image img = icon.getImage().getScaledInstance(buttonSize.width, buttonSize.height, Image.SCALE_SMOOTH);
             btnCreate.setIcon(new ImageIcon(img));
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btnCreate);
         } catch (Exception e) {
             btnCreate.setText("생성");
@@ -331,7 +345,6 @@ public class RoomListUI extends JFrame {
             ImageIcon icon = new ImageIcon(getClass().getResource("/RoomList/cancelBtn.png"));
             Image img = icon.getImage().getScaledInstance(buttonSize.width, buttonSize.height, Image.SCALE_SMOOTH);
             btnCancel.setIcon(new ImageIcon(img));
-            // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
             UIUtils.applyButtonEffects(btnCancel);
         } catch (Exception e) {
             btnCancel.setText("취소");

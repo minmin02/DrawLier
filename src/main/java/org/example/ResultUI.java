@@ -30,38 +30,6 @@ public class ResultUI extends JFrame {
         initializeUI();
     }
 
-    // 버튼에 호버(밝게) 및 클릭(어둡게) 효과를 자동으로 적용하는 메서드
-    private void applyButtonEffects(JButton button) {
-        if (button.getIcon() == null) return;
-
-        ImageIcon originalIcon = (ImageIcon) button.getIcon();
-        Image originalImage = originalIcon.getImage();
-
-        //BufferedImage로 변환
-        int w = originalImage.getWidth(null);
-        int h = originalImage.getHeight(null);
-        java.awt.image.BufferedImage bufferedImage = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = bufferedImage.createGraphics();
-        g2.drawImage(originalImage, 0, 0, null);
-        g2.dispose();
-
-        //호버 효과 (밝게: 1.2배)
-        java.awt.image.RescaleOp hoverFilter = new java.awt.image.RescaleOp(1.2f, 0, null);
-        java.awt.image.BufferedImage hoverImage = hoverFilter.filter(bufferedImage, null);
-        button.setRolloverIcon(new ImageIcon(hoverImage));
-
-        //클릭 효과 (어둡게: 0.8배)
-        java.awt.image.RescaleOp pressFilter = new java.awt.image.RescaleOp(0.8f, 0, null);
-        java.awt.image.BufferedImage pressImage = pressFilter.filter(bufferedImage, null);
-        button.setPressedIcon(new ImageIcon(pressImage));
-
-        //기본 설정 강제 (투명화 등)
-        button.setBorderPainted(false);
-        button.setContentAreaFilled(false);
-        button.setFocusPainted(false);
-        button.setOpaque(false);
-    }
-
     private void initializeUI() {
         setTitle("DrawLier - 게임 결과");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -154,17 +122,16 @@ public class ResultUI extends JFrame {
 
         // 이미지 버튼 생성
         JButton btnConfirm = new JButton();
-        int btnWidth = 100;
-        int btnHeight = 30;
-        btnConfirm.setPreferredSize(new Dimension(btnWidth, btnHeight));
+        btnConfirm.setPreferredSize(new Dimension(100, 30));
 
         try {
             URL btnUrl = getClass().getResource("/PlayUI/GoToLobby.png");
             if (btnUrl != null) {
                 ImageIcon icon = new ImageIcon(btnUrl);
-                Image img = icon.getImage().getScaledInstance(btnWidth, btnHeight, Image.SCALE_SMOOTH);
+                Image img = icon.getImage().getScaledInstance(100, 30, Image.SCALE_SMOOTH);
                 btnConfirm.setIcon(new ImageIcon(img));
-                applyButtonEffects(btnConfirm);
+                // ★★★ [수정] UIUtils의 공용 메소드 호출 ★★★
+                UIUtils.applyButtonEffects(btnConfirm);
             } else {
                 btnConfirm.setText("로비로 이동");
             }
@@ -172,13 +139,6 @@ public class ResultUI extends JFrame {
             e.printStackTrace();
             btnConfirm.setText("로비로 이동");
         }
-
-        // 이미지 버튼 스타일 적용 (투명화)
-        btnConfirm.setBorderPainted(false);
-        btnConfirm.setContentAreaFilled(false);
-        btnConfirm.setFocusPainted(false);
-        btnConfirm.setOpaque(false);
-        btnConfirm.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         //로비로 이동
         btnConfirm.addActionListener(e -> {

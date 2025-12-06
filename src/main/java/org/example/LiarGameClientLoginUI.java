@@ -60,23 +60,22 @@ class RoundBorder extends AbstractBorder {
  */
 public class LiarGameClientLoginUI extends JFrame {
 
-    // (BackgroundPanel 클래스는 이 파일에 없으므로, 이미 정의되어 있다고 가정합니다.)
-    // class BackgroundPanel extends JPanel { ... }
+
     private BackgroundPanel contentPane;
     private JTextField txtIpAddress;
     private JTextField txtNickname;
     private JTextField txtPort;
     private JButton btnEnterGame;
 
-    // 플레이스홀더 텍스트 필드 (기존 코드 유지)
+    // 플레이스홀더 텍스트 필드
     class PlaceholderTextField extends JTextField implements FocusListener {
         private String placeholder;
         private boolean isEmpty;
 
-        // 리팩토링: 둥근 모서리 반경 설정
+        //  둥근 모서리 반경 설정
         private final int CORNER_RADIUS = 10;
 
-        // 리팩토링: 기본 테두리와 포커스 테두리 인셋 설정
+        // 기본 테두리와 포커스 테두리 인셋 설정
         private final Border DEFAULT_PADDING = BorderFactory.createEmptyBorder(8, 15, 8, 15);
         private final Border FOCUSED_PADDING = BorderFactory.createEmptyBorder(7, 14, 7, 14);
 
@@ -100,7 +99,7 @@ public class LiarGameClientLoginUI extends JFrame {
             setOpaque(true);
             setCaretColor(Color.BLACK);
 
-            // --- [리팩토링 1] 둥근 모서리 및 깔끔한 테두리 적용 ---
+            // 둥근 모서리 및 깔끔한 테두리 적용
             Border outerBorder = new RoundBorder(new Color(220, 220, 220), 1, CORNER_RADIUS);
             setBorder(BorderFactory.createCompoundBorder(outerBorder, DEFAULT_PADDING));
         }
@@ -113,7 +112,7 @@ public class LiarGameClientLoginUI extends JFrame {
                 isEmpty = false;
             }
 
-            // --- [리팩토링 2] 포커스 시 강조 효과 ---
+            // 포커스 시 강조 효과
             // 포커스 시 테두리: 눈에 띄는 파란색 (66, 133, 244), 2px 두께
             Border focusedBorder = new RoundBorder(new Color(66, 133, 244), 2, CORNER_RADIUS);
             setBorder(BorderFactory.createCompoundBorder(focusedBorder, FOCUSED_PADDING));
@@ -127,7 +126,7 @@ public class LiarGameClientLoginUI extends JFrame {
                 isEmpty = true;
             }
 
-            // --- [리팩토링 3] 포커스 상실 시 기본 스타일 복구 ---
+            // 포커스 상실 시 기본 스타일 복구
             Border outerBorder = new RoundBorder(new Color(220, 220, 220), 1, CORNER_RADIUS);
             setBorder(BorderFactory.createCompoundBorder(outerBorder, DEFAULT_PADDING));
         }
@@ -141,10 +140,9 @@ public class LiarGameClientLoginUI extends JFrame {
         }
     }
 
-    /**
-     * 이미지를 로드하여 JLabel에 설정하는 헬퍼 메서드
-     * 이미지를 텍스트 필드와 유사한 높이(45px)로 스케일 다운하고 비율을 유지합니다.
-     */
+
+    //이미지를 로드하여 JLabel에 설정하는 헬퍼 메서드
+    //이미지를 텍스트 필드와 유사한 높이로  비율을 유지합니다
     private JLabel createImageLabel(String imagePath, String fallbackText) {
         JLabel label = new JLabel();
 
@@ -160,7 +158,7 @@ public class LiarGameClientLoginUI extends JFrame {
                 throw new Exception("이미지를 찾을 수 없습니다: " + imagePath);
             }
 
-            // 이미지 크기를 목표 크기로 스케일 조정 (비율 유지)
+            // 이미지 크기를 목표 크기로 스케일 조정
             Image img = icon.getImage().getScaledInstance(TARGET_WIDTH, TARGET_HEIGHT, Image.SCALE_SMOOTH);
             label.setIcon(new ImageIcon(img));
 
@@ -183,94 +181,109 @@ public class LiarGameClientLoginUI extends JFrame {
         return label;
     }
 
+    /**
+     * [실행 흐름 1] 프로그램 시작점
+     * - 프로그램 최초 실행 시 호출되는 메인 메서드
+     * - UTF-8 인코딩 설정 후 로그인 UI를 생성하여 표시
+     */
     public static void main(String[] args) {
-        // UTF-8 인코딩 강제 설정
+        // UTF-8 인코딩 강제 설정 (한글 입력 처리를 위함)
         System.setProperty("file.encoding", "UTF-8");
         System.setProperty("client.encoding.override", "UTF-8");
 
+        // GUI 이벤트 디스패치 스레드에서 UI 생성 (스레드 안전성 보장)
         EventQueue.invokeLater(() -> {
             try {
+                // [실행 흐름 2] 로그인 UI 객체 생성 (생성자 호출)
                 LiarGameClientLoginUI frame = new LiarGameClientLoginUI();
-                frame.setVisible(true);
+                frame.setVisible(true); // 화면에 표시
             } catch (Exception e) {
                 e.printStackTrace();
             }
         });
     }
 
+    /**
+     * [실행 흐름 2] 로그인 UI 생성자
+     * - 화면 기본 설정 및 UI 컴포넌트 초기화
+     * - 배경 패널, 입력 필드, 버튼 생성 및 배치
+     * - 이벤트 리스너 등록
+     */
     public LiarGameClientLoginUI() {
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setTitle("DrawLier - Liar Game Client");
+        // [실행 흐름 2-1] 기본 윈도우 설정
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // X 버튼 클릭 시 프로그램 종료
+        setTitle("DrawLier - Liar Game Client"); // 윈도우 타이틀 설정
 
-        setBounds(100, 100, 1100, 900);
+        setBounds(100, 100, 1100, 900); // 윈도우 위치 및 크기 설정
 
-        contentPane = new BackgroundPanel("loginBackground.png");
-        contentPane.setBorder(new EmptyBorder(30, 80, 30, 20));
-        setContentPane(contentPane);
-        contentPane.setLayout(new BorderLayout(0, 20));
+        // [실행 흐름 2-2] 배경 패널 생성 및 설정
+        contentPane = new BackgroundPanel("loginBackground.png"); // 배경 이미지 패널 생성
+        contentPane.setBorder(new EmptyBorder(30, 80, 30, 20)); // 패널 여백 설정
+        setContentPane(contentPane); // 메인 컨텐트 패널로 설정
+        contentPane.setLayout(new BorderLayout(0, 20)); // 레이아웃 설정
 
 
-        // 입력 필드 패널
+        // [실행 흐름 2-3] 입력 필드 패널 생성 및 설정
         JPanel inputPanel = new JPanel();
-        inputPanel.setOpaque(false);
+        inputPanel.setOpaque(false); // 투명 배경 (배경 이미지 표시를 위함)
         // GridBagLayout을 사용하여 크기 제어 및 중앙 정렬
         inputPanel.setLayout(new GridBagLayout());
         inputPanel.setBorder(new EmptyBorder(200, 100, 50, 100)); // 상단 여백 200px
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL; // 가로로 늘어나지 않게 설정
-        gbc.insets = new Insets(0, 0, 10, 0); // 컴포넌트 간의 아래쪽 여백 (10px로 축소)
+        gbc.insets = new Insets(0, 0, 10, 0); // 컴포넌트 간의 아래쪽 여백
         // 텍스트 필드와 이미지가 모두 중앙에 위치하도록 weightx를 0으로 설정하고 anchor를 CENTER로 지정
         gbc.weightx = 0;
         gbc.anchor = GridBagConstraints.CENTER;
 
 
-        // --- Server IP ---
-        JLabel lblIp = createImageLabel("/loginUI/ServerIp.png", "Server IP");
+        // [실행 흐름 2-4] Server IP 입력 필드 생성
+        JLabel lblIp = createImageLabel("/loginUI/ServerIp.png", "Server IP"); // 라벨 이미지 생성
         gbc.gridx = 0; // 0열
         gbc.gridy = 0; // 0행
-        inputPanel.add(lblIp, gbc);
+        inputPanel.add(lblIp, gbc); // 패널에 추가
 
-        txtIpAddress = new PlaceholderTextField("Enter server IP address");
-        txtIpAddress.setText("127.0.0.1");
+        txtIpAddress = new PlaceholderTextField("Enter server IP address"); // IP 입력 필드 생성
+        txtIpAddress.setText("127.0.0.1"); // 기본값 설정 (로컬호스트)
         txtIpAddress.setForeground(Color.BLACK);
         ((PlaceholderTextField)txtIpAddress).isEmpty = false;
         gbc.gridy = 1; // 1행
-        inputPanel.add(txtIpAddress, gbc);
+        inputPanel.add(txtIpAddress, gbc); // 패널에 추가
 
-        // --- Nickname ---
-        JLabel lblNickname = createImageLabel("/loginUI/NickName.png", "Nickname");
+        // [실행 흐름 2-5] Nickname 입력 필드 생성
+        JLabel lblNickname = createImageLabel("/loginUI/NickName.png", "Nickname"); // 라벨 이미지 생성
         gbc.gridy = 2; // 2행
-        inputPanel.add(lblNickname, gbc);
+        inputPanel.add(lblNickname, gbc); // 패널에 추가
 
-        txtNickname = new PlaceholderTextField("Enter your nickname");
+        txtNickname = new PlaceholderTextField("Enter your nickname"); // 닉네임 입력 필드 생성
         gbc.gridy = 3; // 3행
-        inputPanel.add(txtNickname, gbc);
+        inputPanel.add(txtNickname, gbc); // 패널에 추가
 
-        // --- Port ---
-        JLabel lblPort = createImageLabel("/loginUI/Port.png", "Port");
+        // [실행 흐름 2-6] Port 입력 필드 생성
+        JLabel lblPort = createImageLabel("/loginUI/Port.png", "Port"); // 라벨 이미지 생성
         gbc.gridy = 4; // 4행
-        inputPanel.add(lblPort, gbc);
+        inputPanel.add(lblPort, gbc); // 패널에 추가
 
-        txtPort = new PlaceholderTextField("Enter port number");
-        txtPort.setText("30000");
+        txtPort = new PlaceholderTextField("Enter port number"); // 포트 입력 필드 생성
+        txtPort.setText("30000"); // 기본값 설정 (30000번 포트)
         txtPort.setForeground(Color.BLACK);
         ((PlaceholderTextField)txtPort).isEmpty = false;
         gbc.gridy = 5; // 5행
-        inputPanel.add(txtPort, gbc);
+        inputPanel.add(txtPort, gbc); // 패널에 추가
 
-        contentPane.add(inputPanel, BorderLayout.CENTER);
+        contentPane.add(inputPanel, BorderLayout.CENTER); // 입력 패널을 중앙에 배치
 
-        // 하단 버튼 패널
+        // [실행 흐름 2-7] 하단 버튼 패널 생성
         JPanel buttonPanel = new JPanel();
-        buttonPanel.setOpaque(false);
-        buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
-        buttonPanel.setBorder(new EmptyBorder(10, 10, 0, 10));
+        buttonPanel.setOpaque(false); // 투명 배경 설정
+        buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS)); // 세로 정렬
+        buttonPanel.setBorder(new EmptyBorder(10, 10, 0, 10)); // 여백 설정
 
-        // 버튼 이미지 로딩 (기존 코드 유지)
-        btnEnterGame = new JButton(); // 텍스트 제거
+        // [실행 흐름 2-8] 게임 시작 버튼 생성 및 이미지 적용
+        btnEnterGame = new JButton(); // 버튼 객체 생성
 
         try {
-            // 이미지 로드 및 크기 조절
+            // 버튼 이미지 로드 및 크기 조절
             ImageIcon icon = new ImageIcon(getClass().getResource("/loginUI/StartButton.png"));
 
             // 이미지가 제대로 로드되었는지 확인
@@ -280,15 +293,16 @@ public class LiarGameClientLoginUI extends JFrame {
 
             // 버튼 크기는 220x60 유지
             Image img = icon.getImage().getScaledInstance(220, 60, Image.SCALE_SMOOTH);
-            btnEnterGame.setIcon(new ImageIcon(img));
+            btnEnterGame.setIcon(new ImageIcon(img)); // 이미지 아이콘 설정
 
-            btnEnterGame.setBorderPainted(false);
-            btnEnterGame.setContentAreaFilled(false);
-            btnEnterGame.setFocusPainted(false);
-            btnEnterGame.setOpaque(false);
+            // 버튼 스타일 설정 (이미지만 표시되도록)
+            btnEnterGame.setBorderPainted(false); // 테두리 제거
+            btnEnterGame.setContentAreaFilled(false); // 내용 영역 채우기 제거
+            btnEnterGame.setFocusPainted(false); // 포커스 표시 제거
+            btnEnterGame.setOpaque(false); // 불투명 설정 해제
 
         } catch (Exception e) {
-            // 이미지가 없을 경우 텍스트 버튼으로 대체
+            // 이미지가 없을 경우 텍스트 버튼으로 대체 (폴백 처리)
             btnEnterGame.setText("시작하기 ≫");
             btnEnterGame.setFont(new Font("맑은 고딕", Font.BOLD, 18));
             btnEnterGame.setBackground(Color.BLACK);
@@ -296,40 +310,47 @@ public class LiarGameClientLoginUI extends JFrame {
             btnEnterGame.setPreferredSize(new Dimension(220, 60));
             System.err.println("EnterButton.png 이미지를 찾을 수 없습니다: " + e.getMessage());
         }
-        btnEnterGame.setAlignmentX(Component.CENTER_ALIGNMENT);
+        btnEnterGame.setAlignmentX(Component.CENTER_ALIGNMENT); // 버튼 중앙 정렬
 
-        buttonPanel.add(btnEnterGame);
+        buttonPanel.add(btnEnterGame); // 버튼 패널에 추가
 
-        contentPane.add(buttonPanel, BorderLayout.SOUTH);
+        contentPane.add(buttonPanel, BorderLayout.SOUTH); // 버튼 패널을 하단에 배치
 
-        // 이벤트 리스너
-        Myaction action = new Myaction();
-        btnEnterGame.addActionListener(action);
+        // [실행 흐름 2-9] 이벤트 리스너 등록
+        Myaction action = new Myaction(); // 액션 리스너 객체 생성
+        btnEnterGame.addActionListener(action); // 버튼에 클릭 이벤트 리스너 등록
 
-        setLocationRelativeTo(null);
+        setLocationRelativeTo(null); // 화면 중앙에 윈도우 배치
     }
 
+    /**
+     * [실행 흐름 3] 버튼 클릭 이벤트 처리 클래스
+     * - 시작 버튼 클릭 시 입력값 검증 후 방 목록 화면으로 전환
+     */
     class Myaction implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent e) {
             if (e.getSource() == btnEnterGame) {
-                String ip_addr = txtIpAddress.getText().trim();
-                String nickname = txtNickname.getText().trim();
-                String port_no = txtPort.getText().trim();
+                // [실행 흐름 3-1] 입력값 가져오기
+                String ip_addr = txtIpAddress.getText().trim(); // IP 주소
+                String nickname = txtNickname.getText().trim(); // 닉네임
+                String port_no = txtPort.getText().trim(); // 포트 번호
 
+                // [실행 흐름 3-2] 입력값 검증
                 if (nickname.isEmpty() || ip_addr.isEmpty() || port_no.isEmpty()) {
                     JOptionPane.showMessageDialog(null, "모든 정보를 입력해주세요.", "입력 오류", JOptionPane.WARNING_MESSAGE);
-                    return;
+                    return; // 입력값이 비어있으면 중단
                 }
 
                 try {
-                    // 방 목록 화면으로 이동
-                     RoomListUI roomListUI = new RoomListUI(nickname, ip_addr, port_no);
-                     roomListUI.setVisible(true);
-                     dispose();
+                    // [실행 흐름 3-3] 방 목록 화면으로 전환
+                     RoomListUI roomListUI = new RoomListUI(nickname, ip_addr, port_no); // RoomListUI 생성
+                     roomListUI.setVisible(true); // 방 목록 화면 표시
+                     dispose(); // 현재 로그인 화면 종료
 
 
                 } catch (Exception ex) {
+                    // 연결 실패 시 에러 메시지 표시
                     JOptionPane.showMessageDialog(null, "연결 오류: " + ex.getMessage(), "연결 오류", JOptionPane.ERROR_MESSAGE);
                     ex.printStackTrace();
                 }

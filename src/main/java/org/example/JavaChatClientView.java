@@ -14,49 +14,75 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
+/**
+ * 게임 메인 화면 클래스
+ * - 그림 그리기 패널, 채팅 패널, 플레이어 목록 등을 관리
+ * - 서버와 통신하여 게임 진행 상태를 동기화
+ */
 public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCallback, ChatPanel.ChatCallback {
 
     private static final long serialVersionUID = 1L;
+
+    // UI 컴포넌트
     private JPanel contentPane;
     private JButton btnClearAll;
     private JButton btnLeaveRoom;
 
-    private DrawingPanel drawingPanel;
-    private ChatPanel chatPanel;
-    private JButton btnStartGame;
-    private JLabel[] playerLabels;
+    private DrawingPanel drawingPanel; // 그림 그리기 패널
+    private ChatPanel chatPanel; // 채팅 패널
+    private JButton btnStartGame; // 게임 시작 버튼
+    private JLabel[] playerLabels; // 플레이어 목록 라벨 배열
     private JLabel lblRoomInfo;
-    private JLabel lblTimer;
-    private JLabel lblCurrentTurn;
-    private JPanel playerPanel;
-    private JLabel lblHostName;
+    private JLabel lblTimer; // 남은 시간 표시 라벨
+    private JLabel lblCurrentTurn; // 현재 턴 표시 라벨
+    private JPanel playerPanel; // 플레이어 목록 패널
+    private JLabel lblHostName; // 방장 이름 라벨
 
-    private String userName;
-    private GameRoom currentRoom;
-    private boolean isHost;
+    // 사용자 정보
+    private String userName; // 현재 사용자 닉네임
+    private GameRoom currentRoom; // 현재 게임방 정보
+    private boolean isHost; // 방장 여부
 
-    private Socket socket;
-    private DataInputStream dis;
-    private DataOutputStream dos;
+    // 네트워크 통신
+    private Socket socket; // 서버 연결 소켓
+    private DataInputStream dis; // 입력 스트림
+    private DataOutputStream dos; // 출력 스트림
     private String serverIp;
     private String serverPort;
 
-    private JButton btnColorPicker;
-    private JButton btnEraserTool;
+    // 그림 그리기 도구
+    private JButton btnColorPicker; // 색상 선택 버튼
+    private JButton btnEraserTool; // 지우개 버튼
 
-    private Color currentColor = Color.BLACK;
-    private int strokeWidth = 2;
-    private final Color DRAWING_BG_COLOR = Color.WHITE;
-    private boolean isRunning = true;
+    private Color currentColor = Color.BLACK; // 현재 선택된 색상
+    private int strokeWidth = 2; // 펜 굵기
+    private final Color DRAWING_BG_COLOR = Color.WHITE; // 그림판 배경색
+    private boolean isRunning = true; // 네트워크 스레드 실행 여부
 
-    private boolean isLiar;
-    private String myKeyword;
+    // 게임 상태
+    private boolean isLiar; // 라이어 역할 여부
+    private String myKeyword; // 받은 키워드 (라이어는 카테고리, 시민은 제시어)
 
-    private Map<String, ImageIcon> emojiMap;
+    private Map<String, ImageIcon> emojiMap; // 이모지 이미지 맵
 
 
+    /**
+     * [실행 흐름 1] 게임 화면 생성자
+     * - RoomListUI에서 방에 입장하면 호출됨
+     * - 사용자 정보, 소켓, 방 정보를 초기화하고 UI 구성
+     *
+     * @param userName 사용자 닉네임
+     * @param socket 서버와의 연결 소켓
+     * @param dis 서버로부터 데이터를 받는 입력 스트림
+     * @param dos 서버로 데이터를 보내는 출력 스트림
+     * @param room 현재 게임방 정보
+     * @param isHost 방장 여부
+     * @param serverIp 서버 IP 주소
+     * @param serverPort 서버 포트 번호
+     */
     public JavaChatClientView(String userName, Socket socket, DataInputStream dis,
                               DataOutputStream dos, GameRoom room, boolean isHost, String serverIp, String serverPort) {
+        // [실행 흐름 1-1] 멤버 변수 초기화
         this.userName = userName;
         this.socket = socket;
         this.dis = dis;
@@ -66,28 +92,43 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
         this.serverIp = serverIp;
         this.serverPort = serverPort;
 
+        // [실행 흐름 1-2] 이모지 이미지 로드
         loadEmojis();
+
+        // [실행 흐름 1-3] UI 초기화 (패널, 버튼, 레이블 등 생성)
         initializeUI();
+
+        // [실행 흐름 1-4] 서버 메시지 수신 스레드 시작
         new ListenNetwork().start();
 
+        // [실행 흐름 1-5] 플레이어 목록 UI 업데이트
         SwingUtilities.invokeLater(() -> {
             updatePlayerList(currentRoom.getPlayers());
         });
     }
 
+    /**
+     * [실행 흐름 2] 이모지 이미지 로드
+     * - /Imoji 폴더의 모든 PNG, GIF 파일을 읽어 HashMap에 저장
+     * - 파일명을 키로 사용하여 이모지 전송 시 참조
+     */
     private void loadEmojis() {
         emojiMap = new HashMap<>();
         String path = "/Imoji";
         URL dirURL = getClass().getResource(path);
         if (dirURL != null && dirURL.getProtocol().equals("file")) {
             try {
+                // 디렉토리 내 모든 파일 읽기
                 File[] files = new File(dirURL.toURI()).listFiles();
                 if (files != null) {
                     for (File file : files) {
                         String fileName = file.getName();
+                        // PNG 또는 GIF 파일만 처리
                         if (fileName.toLowerCase().endsWith(".png") || fileName.toLowerCase().endsWith(".gif")) {
+                            // 확장자를 제외한 파일명을 키로 사용
                             String emojiKey = fileName.substring(0, fileName.lastIndexOf('.'));
                             ImageIcon icon = new ImageIcon(file.toURI().toURL());
+                            // 이미지를 32x32 크기로 조정
                             Image scaledImage = icon.getImage().getScaledInstance(32, 32, Image.SCALE_SMOOTH);
                             emojiMap.put(emojiKey, new ImageIcon(scaledImage));
                         }
@@ -102,11 +143,18 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
     }
 
 
+    /**
+     * [실행 흐름 3] UI 초기화
+     * - 전체 화면 레이아웃 구성
+     * - 상단 패널, 그리기 패널, 채팅 패널, 플레이어 패널, 하단 버튼 패널 생성
+     */
     private void initializeUI() {
+        // [실행 흐름 3-1] 기본 윈도우 설정
         setTitle("DrawLier - " + currentRoom.getRoomName() + " [" + userName + "]");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setBounds(100, 100, 1200, 800);
 
+        // [실행 흐름 3-2] 배경 이미지가 있는 메인 패널 생성
         contentPane = new JPanel() {
             Image background = new ImageIcon(getClass().getResource("/game/back.png")).getImage();
 
@@ -120,16 +168,19 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
         contentPane.setLayout(new BorderLayout(10, 10));
         setContentPane(contentPane);
 
+        // [실행 흐름 3-3] 상단 패널 생성
         JPanel topPanel = createTopPanel();
         topPanel.setOpaque(false);
         contentPane.add(topPanel, BorderLayout.NORTH);
 
+        // [실행 흐름 3-4] 중앙 분할 패널 생성
         JSplitPane centerSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         centerSplitPane.setResizeWeight(0.2);
         centerSplitPane.setEnabled(false);
         centerSplitPane.setOpaque(false);
         centerSplitPane.setBorder(null);
 
+        // [실행 흐름 3-5] 그리기 패널 생성
         drawingPanel = new DrawingPanel(this);
         drawingPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
 
@@ -137,31 +188,36 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
         drawContainer.setOpaque(false);
         drawContainer.add(drawingPanel, BorderLayout.CENTER);
 
+        // [실행 흐름 3-6] 도구 패널 생성
         JPanel toolPanel = createToolPanel();
         drawContainer.add(toolPanel, BorderLayout.SOUTH);
 
         centerSplitPane.setLeftComponent(drawContainer);
 
+        // [실행 흐름 3-7] 채팅 패널 생성
         chatPanel = new ChatPanel(userName, currentRoom, emojiMap, this, this);
         centerSplitPane.setRightComponent(chatPanel);
 
         centerSplitPane.setDividerLocation(0.38);
         contentPane.add(centerSplitPane, BorderLayout.CENTER);
 
+        // [실행 흐름 3-8] 플레이어 목록 패널 생성
         playerPanel = createPlayerPanel();
         playerPanel.setOpaque(false);
         contentPane.add(playerPanel, BorderLayout.EAST);
 
+        // [실행 흐름 3-9] 하단 게임 시작 버튼 패널 생성
         JPanel bottomPanel = createBottomPanel();
         bottomPanel.setOpaque(false);
         contentPane.add(bottomPanel, BorderLayout.SOUTH);
 
-        setLocationRelativeTo(null);
+        setLocationRelativeTo(null); // 화면 중앙에 배치
 
+        // [실행 흐름 3-10] 윈도우 종료 이벤트 리스너 등록
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                disconnect();
+                disconnect(); // 서버 연결 종료
             }
         });
     }
@@ -500,10 +556,17 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
     }
 
 
+    /**
+     * [실행 흐름 5] 서버로 메시지 전송
+     * - DrawingPanel, ChatPanel에서 콜백으로 호출
+     * - 채팅 메시지, 그리기 명령 등을 서버로 전송
+     *
+     * @param msg 전송할 메시지 (프로토콜 형식)
+     */
     @Override
     public void sendProtocol(String msg) {
         try {
-            dos.writeUTF(msg);
+            dos.writeUTF(msg); // 서버로 메시지 전송
         } catch (IOException e) {
             if (chatPanel != null) {
                 chatPanel.appendSystemMessage("메시지 전송 실패");
@@ -601,11 +664,19 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
     }
 
 
+    /**
+     * [실행 흐름 4] 서버 메시지 수신 스레드
+     * - 서버로부터 지속적으로 메시지를 수신하여 처리
+     * - 게임 상태 업데이트, 채팅 메시지, 그리기 명령 등 처리
+     */
     class ListenNetwork extends Thread {
         public void run() {
             while (isRunning) {
                 try {
+                    // [실행 흐름 4-1] 서버로부터 메시지 수신 (블로킹)
                     String msg = dis.readUTF();
+
+                    // [실행 흐름 4-2] 플레이어 목록 업데이트 메시지 처리
                     if(msg.startsWith("/updatePlayerList")) {
                         String playerStr = msg.substring(18);
                         String [] players = playerStr.split(",");
@@ -617,9 +688,10 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                             }
                         }
                         currentRoom.updatePlayers(newPlayerList);
-                        updatePlayerList(currentRoom.getPlayers());
+                        updatePlayerList(currentRoom.getPlayers()); // UI 업데이트
                     }
 
+                    // [실행 흐름 4-3] 게임 시작 메시지 처리 (역할 배정)
                     if (msg.startsWith("/gameStart ")) {
                         String[] parts = msg.substring(11).split("\\|");
                         if (parts.length >= 2) {
@@ -772,6 +844,7 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                             });
                         }
                     }
+                    // [실행 흐름 4-4] 게임 상태 업데이트 메시지 처리 (턴, 라운드, 타이머)
                     else if (msg.startsWith("/gameState|")) {
                         String[] parts = msg.substring(11).split("\\|");
                         int turnIndex = Integer.parseInt(parts[0]);
@@ -783,17 +856,19 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                             updateTurnInfo(turnIndex, round, currentPlayer, remainingSeconds);
                         });
                     }
+                    // [실행 흐름 4-5] 게임 종료 메시지 처리 (투표 화면으로 전환)
                     else if (msg.startsWith("/gameEnded")) {
                         System.out.println("[Client] 게임 종료 수신 - 투표 화면으로 전환");
                         isRunning = false;
 
                         SwingUtilities.invokeLater(() -> {
                             chatPanel.appendSystemMessage("===== 게임이 종료되었습니다! 투표를 시작합니다. =====");
-                            openVotingUI();
+                            openVotingUI(); // 투표 UI 열기
                         });
 
                         break;
                     }
+                    // [실행 흐름 4-6] 플레이어 입장 메시지 처리
                     else if (msg.startsWith("/playerJoined ")) {
                         String newPlayer = msg.substring(14);
                         SwingUtilities.invokeLater(() -> {
@@ -802,6 +877,7 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                             updatePlayerList(currentRoom.getPlayers());
                         });
                     }
+                    // [실행 흐름 4-7] 플레이어 퇴장 메시지 처리
                     else if (msg.startsWith("/playerLeft ")) {
                         String leftPlayer = msg.substring(12);
                         SwingUtilities.invokeLater(() -> {
@@ -810,6 +886,7 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                             updatePlayerList(currentRoom.getPlayers());
                         });
                     }
+                    // [실행 흐름 4-8] 방장 변경 메시지 처리
                     else if (msg.startsWith("/hostChanged ")) {
                         String newHostName = msg.substring(13);
                         SwingUtilities.invokeLater(() -> {
@@ -821,14 +898,17 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                             updateStartButtonState();
                         });
                     }
+                    // [실행 흐름 4-9] 그리기 명령 메시지 처리
                     else if (msg.startsWith("/draw ")) {
-                        drawingPanel.processDrawCommand(msg);
+                        drawingPanel.processDrawCommand(msg); // 다른 플레이어의 그리기 동기화
                     }
+                    // [실행 흐름 4-10] 전체 지우기 명령 메시지 처리
                     else if (msg.startsWith("/clear")) {
-                        drawingPanel.clear();
+                        drawingPanel.clear(); // 그림판 초기화
                     }
+                    // [실행 흐름 4-11] 일반 채팅 메시지 처리
                     else {
-                        chatPanel.appendChatMessage(msg);
+                        chatPanel.appendChatMessage(msg); // 채팅창에 표시
                     }
                 } catch (IOException e) {
                     if(isRunning){

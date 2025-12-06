@@ -1,0 +1,163 @@
+================================================================================
+                          DrawLier 프로젝트 보고서
+================================================================================
+
+작성일: 2025-12-06
+프로젝트명: DrawLier (라이어 게임)
+
+================================================================================
+1. 금주 수행작업
+================================================================================
+
+(1) JavaChatClientView UI 디자인 개선
+────────────────────────────────────────────────────────────────
+
+■ 작업 내용:
+  - 이미지 기반 버튼 UI로 전환 (나가기, 색상선택, 지우개, 전송 등)
+  - 게임 배경 이미지 적용 (/game/back.png)
+  - 플레이어 슬롯에 이미지 적용 (참가자/대기 상태 구분)
+  - 카테고리, 방장 정보에 아이콘 이미지 추가
+  - 투명 배경 처리로 자연스러운 UI 구성
+
+■ 문제점:
+  - 기존 텍스트 기반 버튼으로 시각적 완성도 부족
+  - 배경이 단조로워 게임 몰입감 저하
+  - 이미지 로드 실패 시 대체 방안 부재
+
+■ 해결방법:
+  - ImageIcon 기반 버튼 이미지 적용
+  - resizeIcon() 메서드로 이미지 크기 조정
+  - 이미지 로드 실패 시 텍스트 버튼으로 폴백 처리
+  - setOpaque(false)로 패널 투명화 처리
+
+■ 핵심 로직:
+
+  // 이미지 아이콘 리사이징 (JavaChatClientView.java:844)
+  public ImageIcon resizeIcon(String path, int width, int height) {
+      java.net.URL imgURL = getClass().getResource(path);
+      if (imgURL != null) {
+          ImageIcon icon = new ImageIcon(imgURL);
+          Image img = icon.getImage().getScaledInstance(width, height, Image.SCALE_SMOOTH);
+          return new ImageIcon(img);
+      }
+      return null;
+  }
+
+  // 배경 이미지 적용 (JavaChatClientView.java:110-117)
+  contentPane = new JPanel() {
+      Image background = new ImageIcon(getClass().getResource("/game/back.png")).getImage();
+      @Override
+      protected void paintComponent(Graphics g) {
+          super.paintComponent(g);
+          g.drawImage(background, 0, 0, getWidth(), getHeight(), this);
+      }
+  };
+
+
+(2) 채팅 이모지 구현
+────────────────────────────────────────────────────────────────
+
+■ 작업 내용:
+  - /Imoji 폴더에서 이모지 이미지 자동 로드
+  - 이모지 선택 다이얼로그 구현 (6열 그리드 레이아웃)
+  - 채팅창에 이모지 전송 및 표시 기능
+  - 텍스트 대신 이미지로 이모지 표현
+
+■ 문제점:
+  - 텍스트 기반 이모지는 폰트에 따라 표시 불가
+  - 다양한 이모지 표현 제한
+  - 이모지 선택 UI 부재
+
+■ 해결방법:
+  - PNG/GIF 이미지 파일을 HashMap에 로드
+  - 이모지 버튼 클릭 시 그리드 형태의 선택창 표시
+  - /emoji 프로토콜로 이모지 키 전송
+  - 채팅 메시지 파싱 시 이모지 이미지로 변환
+
+■ 핵심 로직:
+
+  // 이모지 로드 (JavaChatClientView.java:78-102)
+  private void loadEmojis() {
+      emojiMap = new HashMap<>();
+      URL dirURL = getClass().getResource("/Imoji");
+      File[] files = new File(dirURL.toURI()).listFiles();
+      for (File file : files) {
+          if (fileName.endsWith(".png") || fileName.endsWith(".gif")) {
+              String emojiKey = fileName.substring(0, fileName.lastIndexOf('.'));
+              ImageIcon icon = new ImageIcon(file.toURI().toURL());
+              Image scaledImage = icon.getImage().getScaledInstance(32, 32, Image.SCALE_SMOOTH);
+              emojiMap.put(emojiKey, new ImageIcon(scaledImage));
+          }
+      }
+  }
+
+  // 이모지 전송 (ChatPanel.java:282-287)
+  btnEmoticon.addActionListener(e -> {
+      if (callback != null) {
+          callback.sendProtocol(userName + ": /emoji " + emojiKey);
+      }
+      emojiDialog.dispose();
+  });
+
+  // 이모지 표시 (ChatPanel.java:194-199)
+  if (message.startsWith("/emoji ")) {
+      String emojiKey = message.substring(7).trim();
+      if (emojiMap.containsKey(emojiKey)) {
+          JLabel emojiLabel = new JLabel(emojiMap.get(emojiKey));
+          bubble.add(emojiLabel);
+      }
+  }
+
+
+(3) 소스파일 분할
+────────────────────────────────────────────────────────────────
+
+■ 작업 내용:
+  - JavaChatClientView에서 ChatPanel 클래스 분리
+  - DrawingPanel 클래스 분리
+  - UIComponents 클래스로 커스텀 UI 컴포넌트 분리
+  - Callback 인터페이스 패턴으로 의존성 관리
+
+■ 문제점:
+  - 단일 파일에 모든 로직이 집중되어 가독성 저하
+  - 코드 유지보수 어려움
+  - 재사용 가능한 컴포넌트 미분리
+
+■ 해결방법:
+  - 기능별로 독립적인 클래스 파일 생성
+  - 인터페이스 패턴으로 느슨한 결합 구현
+  - 각 패널이 필요한 메서드만 콜백으로 호출
+
+■ 핵심 로직:
+
+  // Callback 인터페이스 패턴 (DrawingPanel.java:14-19)
+  public interface DrawingCallback {
+      void sendProtocol(String msg);
+      Color getCurrentColor();
+      int getStrokeWidth();
+      Color getDrawingBgColor();
+  }
+
+  // 분리된 패널 초기화 (JavaChatClientView.java:133-146)
+  drawingPanel = new DrawingPanel(this);
+  chatPanel = new ChatPanel(userName, currentRoom, emojiMap, this, this);
+
+  // 커스텀 UI 컴포넌트 분리 (UIComponents.java)
+  - RoundedButton: 둥근 모서리 버튼
+  - RoundedTextField: 둥근 모서리 입력 필드
+  - RoundedBubblePanel: 말풍선 형태 채팅 버블
+  - RoundedBorder: 커스텀 테두리
+
+
+================================================================================
+2. 다음주 예정작업
+================================================================================
+
+■ 버그 수정 및 안정화
+  - 게임 진행 중 발생하는 버그 수정
+  - 네트워크 연결 안정성 개선
+  - UI 버그 및 레이아웃 이슈 해결
+  - 예외 처리 강화
+  - 테스트 및 품질 개선
+
+================================================================================

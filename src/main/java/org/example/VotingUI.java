@@ -17,7 +17,7 @@ public class VotingUI extends JFrame {
     private String serverIp;
     private String serverPort;
 
-    // ★★★ [추가] 소켓 및 스트림 필드
+    //소켓 및 스트림 필드
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
@@ -27,7 +27,7 @@ public class VotingUI extends JFrame {
     private String selectedPlayer;
     private boolean hasVoted = false;
 
-    // ★★★ [수정] 생성자에서 소켓과 스트림을 받도록 변경
+    //생성자
     public VotingUI(String userName, List<String> players, String roomId, String serverIp, String serverPort, Socket socket, DataInputStream dis, DataOutputStream dos) {
         this.userName = userName;
         this.players = players;
@@ -41,7 +41,7 @@ public class VotingUI extends JFrame {
         initializeUI();
         new ListenVoteResult().start();
     }
-
+    //투표 UI
     private void initializeUI() {
         setTitle("DrawLier - 투표 시간!");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -79,9 +79,9 @@ public class VotingUI extends JFrame {
         votingPanel.setOpaque(false);
         votingPanel.setBorder(new EmptyBorder(70, 50, 30, 50));
 
-        voteButtons = new JButton[players.size()];
+        voteButtons = new JButton[players.size()]; //투표 버튼
 
-        for (int i = 0; i < players.size(); i++) {
+        for (int i = 0; i < players.size(); i++) { //플레이어 수 만큼 버튼 생성.
             String player = players.get(i);
             JButton btnVote = new JButton();
 
@@ -93,6 +93,7 @@ public class VotingUI extends JFrame {
                     new EmptyBorder(10, 10, 10, 10)
             ));
 
+            //플레이어 아이콘 라벨 추가
             JLabel iconLabel = new JLabel("👤", SwingConstants.CENTER);
             iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 30));
             btnVote.add(iconLabel, BorderLayout.CENTER);
@@ -101,6 +102,7 @@ public class VotingUI extends JFrame {
             nameLabel.setFont(new Font("맑은 고딕", Font.BOLD, 18));
             nameLabel.setBorder(new EmptyBorder(10, 0, 0, 0));
 
+            //본인은 선택하지 못하도록 설정
             if (player.equals(userName)) {
                 nameLabel.setText(player + " (나)");
                 nameLabel.setForeground(Color.GRAY);
@@ -115,7 +117,9 @@ public class VotingUI extends JFrame {
             final JButton finalBtn = btnVote;
             final String finalPlayer = player;
 
+            //투표 버튼 이벤트 리스너
             btnVote.addMouseListener(new java.awt.event.MouseAdapter() {
+                //마우스 호버 효과 (커서를 올렸을 때)
                 public void mouseEntered(java.awt.event.MouseEvent evt) {
                     if (finalBtn.isEnabled() && !hasVoted) {
                         finalBtn.setBackground(new Color(230, 240, 255));
@@ -125,7 +129,7 @@ public class VotingUI extends JFrame {
                         ));
                     }
                 }
-
+                //마우스 호버 효과 (커서를 치웠을 때)
                 public void mouseExited(java.awt.event.MouseEvent evt) {
                     if (finalBtn.isEnabled() && !hasVoted && !finalPlayer.equals(selectedPlayer)) {
                         finalBtn.setBackground(Color.WHITE);
@@ -136,13 +140,12 @@ public class VotingUI extends JFrame {
                     }
                 }
             });
-
+            //투표 기능
             btnVote.addActionListener(e -> {
                 if (!hasVoted) {
                     selectPlayer(finalPlayer, finalBtn);
                 }
             });
-
             voteButtons[i] = btnVote;
             votingPanel.add(btnVote);
         }
@@ -155,7 +158,7 @@ public class VotingUI extends JFrame {
 
         JButton btnConfirm = new JButton();
         btnConfirm.setPreferredSize(new Dimension(100, 30));
-
+        //투표 화면 배경 이미지 설정
         try {
             URL btnUrl = getClass().getResource("/PlayUI/VoteButton.png");
             if (btnUrl != null) {
@@ -180,8 +183,9 @@ public class VotingUI extends JFrame {
         setVisible(true);
     }
 
+    //투표로 선택한 사용자를 나타내주는 메소드
     private void selectPlayer(String player, JButton button) {
-        if (hasVoted) return;
+        if (hasVoted) return; //이미 투표했으면 리턴
 
         for (int i = 0; i < voteButtons.length; i++) {
             if (voteButtons[i].isEnabled()) {
@@ -201,23 +205,24 @@ public class VotingUI extends JFrame {
         ));
     }
 
+    //투표 확인 기능 메소드
     private void submitVote() {
-        if (hasVoted) {
+        if (hasVoted) { //이미 투표했으면 알림 후 리턴
             JOptionPane.showMessageDialog(this, "이미 투표하셨습니다!", "알림", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        if (selectedPlayer == null) {
+        if (selectedPlayer == null) { //사용자 선택을 안 하고 투표 버튼을 누르면, 알림 후 리턴
             JOptionPane.showMessageDialog(this, "투표할 플레이어를 선택해주세요!", "알림", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
+        //투표로 선택한 사용자를 프로토콜로 전송
         try {
             dos.writeUTF("/vote " + selectedPlayer);
-            hasVoted = true;
+            hasVoted = true; //중복 투표 방지
 
             for (JButton btn : voteButtons) {
-                btn.setEnabled(false);
+                btn.setEnabled(false); //다른 사용자 선택 못하도록 설정
             }
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "투표 전송 중 오류가 발생했습니다.", "오류", JOptionPane.ERROR_MESSAGE);
@@ -225,6 +230,7 @@ public class VotingUI extends JFrame {
         }
     }
 
+    //서버로부터 투표 및 최종 결과를 수신하는 리스너 스레드
     class ListenVoteResult extends Thread {
         public void run() {
             try {
@@ -232,18 +238,18 @@ public class VotingUI extends JFrame {
                     String msg = dis.readUTF();
                     System.out.println("[VotingUI] 수신한 메시지: " + msg);
 
-                    if (msg.startsWith("/voteResult ")) {
+                    if (msg.startsWith("/voteResult ")) { //투표 결과 확인 프로토콜 수신
                         String[] parts = msg.substring(12).split("\\|");
                         String mostVoted = parts[0];
-                        boolean isLiar = parts[1].equals("true");
+                        boolean isLiar = parts[1].equals("true"); //라이어가 투표로 걸렸는지 확인
 
                         SwingUtilities.invokeLater(() -> {
                             if (isLiar) {
-                                if (userName.equals(mostVoted)) {
-                                    // ★★★ [수정] InsertAnswerUI 생성자에 소켓과 스트림 전달
+                                if (userName.equals(mostVoted)) { //라이어가 가장 많이 투표 됐으면 정답 입력 UI 호출
+                                    //InsertAnswerUI 생성자에 소켓과 스트림 전달
                                     new InsertAnswerUI(userName, roomId, serverIp, serverPort, socket, dis, dos);
                                     dispose();
-                                } else {
+                                } else { //라이어가 아닌 사람들은 대기 화면 UI를 출력하여 대기.
                                     JPanel fullWaitPanel = new JPanel() {
                                         private Image waitImage;
                                         {
@@ -269,23 +275,25 @@ public class VotingUI extends JFrame {
                                     revalidate();
                                     repaint();
                                 }
-                            } else {
-                                // ★★★ [수정] ResultUI 생성자에 소켓과 스트림 전달
+                            } else { //라이어가 투표로 걸리지 않았다면, 바로 라이어 승리 결과 UI 호출
+                                //ResultUI 생성자에 소켓과 스트림 전달
                                 new ResultUI(userName, false, mostVoted + "님이 억울하게 투표되었습니다!\n실제 라이어는 다른 플레이어였습니다.\n", roomId, serverIp, serverPort, socket, dis, dos);
                                 dispose();
                             }
                         });
 
+                        //리스너 스레드를 종료하여 다른 스레드와의 충돌 방지
                         if (isLiar && userName.equals(mostVoted)) break;
                         if (!isLiar) break;
                     }
+                    //최종 결과 프로토콜 수신
                     else if (msg.startsWith("/finalResult ")) {
                         String[] parts = msg.substring(13).split("\\|", 3);
-                        boolean citizenWin = parts[0].equals("CITIZEN");
+                        boolean citizenWin = parts[0].equals("CITIZEN"); //시민이 이겼는지 유무
                         String message = parts[2];
 
                         SwingUtilities.invokeLater(() -> {
-                            // ★★★ [수정] ResultUI 생성자에 소켓과 스트림 전달
+                            // ResultUI 생성자에 소켓과 스트림, 게임 결과 전달
                             new ResultUI(userName, citizenWin, message, roomId, serverIp, serverPort, socket, dis, dos);
                             dispose();
                         });

@@ -71,6 +71,11 @@ public class GameRoom {
         players.remove(playerName);
     }
 
+    public void updatePlayers(List<String> newPlayers) {
+        this.players.clear();
+        this.players.addAll(newPlayers);
+    }
+
     public boolean canStartGame() {
         return players.size() == REQUIRED_PLAYERS && !isGameRunning;
     }

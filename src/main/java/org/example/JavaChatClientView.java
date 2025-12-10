@@ -123,8 +123,8 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                 if (files != null) {
                     for (File file : files) {
                         String fileName = file.getName();
-                        // PNG 또는 GIF 파일만 처리
-                        if (fileName.toLowerCase().endsWith(".png") || fileName.toLowerCase().endsWith(".gif")) {
+                        // PNG 파일만 처리
+                        if (fileName.toLowerCase().endsWith(".png")) {
                             // 확장자를 제외한 파일명을 키로 사용
                             String emojiKey = fileName.substring(0, fileName.lastIndexOf('.'));
                             ImageIcon icon = new ImageIcon(file.toURI().toURL());

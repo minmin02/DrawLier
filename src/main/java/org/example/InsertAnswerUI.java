@@ -12,21 +12,23 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 
 public class InsertAnswerUI extends JFrame {
+    //사용자 및 서버 정보
     private String userName;
     private String roomId;
     private String serverIp;
     private String serverPort;
 
-    // ★★★ [추가] 소켓 및 스트림 필드
+    //네트워크 관련 필드
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
 
+    //UI 컴포넌트
     private JTextField txtAnswer;
     private JButton btnSubmit;
-    private boolean hasSubmitted = false;
+    private boolean hasSubmitted = false; //정답 제출 여부 (중복 제출 방지)
 
-    // ★★★ [수정] 생성자에서 소켓과 스트림을 받도록 변경
+    //생성자: 라이어가 정답을 입력할 때 호출
     public InsertAnswerUI(String userName, String roomId, String serverIp, String serverPort, Socket socket, DataInputStream dis, DataOutputStream dos) {
         this.userName = userName;
         this.roomId = roomId;
@@ -37,14 +39,16 @@ public class InsertAnswerUI extends JFrame {
         this.dos = dos;
 
         initializeUI();
-        new ListenResult().start();
+        new ListenResult().start(); //최종 결과를 수신하는 스레드 시작
     }
 
+    //정답 입력 UI를 초기화하는 메소드
     private void initializeUI() {
         setTitle("DrawLier - 마지막 기회!");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setBounds(100, 100, 550, 400);
 
+        //배경 이미지를 그리는 패널 설정
         JPanel contentPane = new JPanel() {
             private BufferedImage bgImage;
             {
@@ -74,10 +78,12 @@ public class InsertAnswerUI extends JFrame {
         contentPane.setLayout(new BorderLayout(0, 0));
         setContentPane(contentPane);
 
+        //중앙 입력 패널 (투명)
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.setOpaque(false);
-        centerPanel.setBorder(new EmptyBorder(180, 80, 20, 80));
+        centerPanel.setBorder(new EmptyBorder(180, 80, 20, 80)); //배경 이미지에 맞게 여백 설정
 
+        //정답 입력 필드
         txtAnswer = new JTextField();
         txtAnswer.setFont(new Font("맑은 고딕", Font.BOLD, 20));
         txtAnswer.setHorizontalAlignment(JTextField.CENTER);
@@ -86,6 +92,7 @@ public class InsertAnswerUI extends JFrame {
                 BorderFactory.createLineBorder(new Color(220, 53, 69), 3, true),
                 new EmptyBorder(10, 10, 10, 10)
         ));
+        //입력 필드에 포커스가 갔을 때와 잃었을 때 테두리 색상 변경 효과
         txtAnswer.addFocusListener(new java.awt.event.FocusAdapter() {
             public void focusGained(java.awt.event.FocusEvent evt) {
                 txtAnswer.setBorder(BorderFactory.createCompoundBorder(
@@ -100,14 +107,16 @@ public class InsertAnswerUI extends JFrame {
                 ));
             }
         });
-        txtAnswer.addActionListener(e -> submitAnswer());
+        txtAnswer.addActionListener(e -> submitAnswer()); //Enter 키로 제출 가능
         centerPanel.add(txtAnswer, BorderLayout.CENTER);
         contentPane.add(centerPanel, BorderLayout.CENTER);
 
+        //하단 버튼 패널
         JPanel bottomPanel = new JPanel();
         bottomPanel.setOpaque(false);
         bottomPanel.setBorder(new EmptyBorder(10, 0, 40, 0));
 
+        //'정답 제출' 버튼 생성
         btnSubmit = new JButton();
         btnSubmit.setPreferredSize(new Dimension(100, 30));
         try {
@@ -116,7 +125,7 @@ public class InsertAnswerUI extends JFrame {
                 ImageIcon icon = new ImageIcon(btnUrl);
                 Image img = icon.getImage().getScaledInstance(100, 30, Image.SCALE_SMOOTH);
                 btnSubmit.setIcon(new ImageIcon(img));
-                UIUtils.applyButtonEffects(btnSubmit);
+                UIUtils.applyButtonEffects(btnSubmit); //공용 버튼 효과 적용
             } else {
                 btnSubmit.setText("정답 제출");
                 System.err.println("이미지를 찾을 수 없습니다: /PlayUI/Submit.png");
@@ -131,25 +140,32 @@ public class InsertAnswerUI extends JFrame {
 
         setLocationRelativeTo(null);
         setVisible(true);
-        SwingUtilities.invokeLater(() -> txtAnswer.requestFocus());
+        SwingUtilities.invokeLater(() -> txtAnswer.requestFocus()); //창이 열리면 바로 입력 필드에 포커스
     }
 
+    //정답을 서버로 제출하는 메소드
     private void submitAnswer() {
-        if (hasSubmitted) return;
+        if (hasSubmitted) return; //이미 제출했으면 중복 방지
+
         String answer = txtAnswer.getText().trim();
         if (answer.isEmpty()) {
             JOptionPane.showMessageDialog(this, "정답을 입력해주세요!", "알림", JOptionPane.WARNING_MESSAGE);
             txtAnswer.requestFocus();
             return;
         }
+
         try {
-            dos.writeUTF("/liarAnswer " + answer);
+            dos.writeUTF("/liarAnswer " + answer); //라이어 정답 프로토콜 전송
             hasSubmitted = true;
+
+            //제출 후 버튼과 입력창 비활성화
             btnSubmit.setEnabled(false);
             txtAnswer.setEnabled(false);
+
             JOptionPane.showMessageDialog(this, "정답을 제출했습니다.\n결과를 확인하는 중...", "제출 완료", JOptionPane.INFORMATION_MESSAGE);
+
         } catch (IOException e) {
-            hasSubmitted = false;
+            hasSubmitted = false; //전송 실패 시 다시 제출 가능하도록
             JOptionPane.showMessageDialog(this, "정답 전송 중 오류가 발생했습니다.\n다시 시도해주세요.", "오류", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
             btnSubmit.setEnabled(true);
@@ -157,6 +173,7 @@ public class InsertAnswerUI extends JFrame {
         }
     }
 
+    //서버로부터 최종 게임 결과를 수신하는 리스너 스레드
     class ListenResult extends Thread {
         public void run() {
             try {
@@ -164,17 +181,18 @@ public class InsertAnswerUI extends JFrame {
                 while (true) {
                     String msg = dis.readUTF();
                     System.out.println("[InsertAnswerUI] 수신한 메시지: " + msg);
+                    //최종 결과 프로토콜 수신
                     if (msg.startsWith("/finalResult ")) {
                         String[] parts = msg.substring(13).split("\\|", 3);
-                        boolean citizenWin = parts[0].equals("CITIZEN");
-                        String message = parts[2];
+                        boolean citizenWin = parts[0].equals("CITIZEN"); //시민 승리 여부
+                        String message = parts[2]; //결과 메시지
                         System.out.println("[InsertAnswerUI] 최종 결과 - 시민승리: " + citizenWin);
                         SwingUtilities.invokeLater(() -> {
-                            // ★★★ [수정] ResultUI 생성자에 소켓과 스트림 전달
+                            //기존 연결을 유지한 채 결과 UI로 전환
                             new ResultUI(userName, citizenWin, message, roomId, serverIp, serverPort, socket, dis, dos);
-                            dispose();
+                            dispose(); //현재 정답 입력 창 닫기
                         });
-                        break;
+                        break; //스레드 종료
                     }
                 }
             } catch (IOException e) {

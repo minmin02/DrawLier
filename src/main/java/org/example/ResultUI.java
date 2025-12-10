@@ -12,19 +12,20 @@ import java.net.Socket;
 import java.net.URL;
 
 public class ResultUI extends JFrame {
+    //사용자 및 게임 정보
     private String userName;
-    private boolean citizenWin;
-    private String resultMessage;
+    private boolean citizenWin; //시민 승리 여부
+    private String resultMessage; //결과 메시지
     private String roomId;
     private String serverIp;
     private String serverPort;
 
-    // ★★★ [추가] 소켓 및 스트림 필드
+    //네트워크 관련 필드
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
 
-    // ★★★ [수정] 생성자에서 소켓과 스트림을 받도록 변경
+    //생성자: 게임 결과 정보를 받아 UI를 초기화
     public ResultUI(String userName, boolean citizenWin, String resultMessage, String roomId, String serverIp, String serverPort, Socket socket, DataInputStream dis, DataOutputStream dos) {
         this.userName = userName;
         this.citizenWin = citizenWin;
@@ -39,15 +40,18 @@ public class ResultUI extends JFrame {
         initializeUI();
     }
 
+    //결과 UI를 초기화하는 메소드
     private void initializeUI() {
         setTitle("DrawLier - 게임 결과");
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE); //창을 닫을 때 임의로 종료되지 않도록 설정
         setBounds(100, 100, 650, 550);
 
+        //배경 이미지를 그리는 패널 설정
         JPanel contentPane = new JPanel() {
             private BufferedImage bgImage;
             {
                 try {
+                    //승패 결과에 따라 다른 배경 이미지 로드
                     String fileName = citizenWin ? "CitizenWin.png" : "LiarWin.png";
                     URL imageUrl = getClass().getResource("/ResultTabUI/" + fileName);
                     if (imageUrl != null) {
@@ -74,18 +78,22 @@ public class ResultUI extends JFrame {
         contentPane.setLayout(new BorderLayout(0, 0));
         setContentPane(contentPane);
 
+        //중앙 메시지 패널 (투명)
         JPanel centerPanel = new JPanel(new BorderLayout(0, 0));
         centerPanel.setOpaque(false);
-        centerPanel.setBorder(new EmptyBorder(200, 175, 60, 100));
+        centerPanel.setBorder(new EmptyBorder(200, 175, 60, 100)); //배경 이미지에 맞게 여백 설정
 
+        //결과 메시지를 담을 패널
         JPanel messagePanel = new JPanel(new BorderLayout());
-        messagePanel.setOpaque(false);
+        messagePanel.setOpaque(false); //배경 투명
 
+        //메시지 제목
         JLabel lblMessageTitle = new JLabel("게임 결과 상세");
         lblMessageTitle.setFont(new Font("맑은 고딕", Font.BOLD, 14));
         lblMessageTitle.setForeground(Color.WHITE);
         lblMessageTitle.setBorder(new EmptyBorder(0, 0, 5, 0));
 
+        //결과 메시지 텍스트 영역
         JTextArea txtMessage = new JTextArea(resultMessage);
         txtMessage.setFont(new Font("맑은 고딕", Font.PLAIN, 13));
         txtMessage.setForeground(Color.WHITE);
@@ -100,6 +108,7 @@ public class ResultUI extends JFrame {
         textPanel.add(txtMessage, BorderLayout.CENTER);
         messagePanel.add(textPanel, BorderLayout.CENTER);
 
+        //메시지가 길어질 경우를 대비한 스크롤 패널
         JScrollPane scrollPane = new JScrollPane(messagePanel);
         scrollPane.setOpaque(false);
         scrollPane.getViewport().setOpaque(false);
@@ -109,10 +118,12 @@ public class ResultUI extends JFrame {
         centerPanel.add(scrollPane, BorderLayout.CENTER);
         contentPane.add(centerPanel, BorderLayout.CENTER);
 
+        //하단 버튼 패널
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         bottomPanel.setOpaque(false);
         bottomPanel.setBorder(new EmptyBorder(0, 0, 30, 0));
 
+        //'로비로 이동' 버튼 생성
         JButton btnConfirm = new JButton();
         btnConfirm.setPreferredSize(new Dimension(100, 30));
         try {
@@ -121,7 +132,7 @@ public class ResultUI extends JFrame {
                 ImageIcon icon = new ImageIcon(btnUrl);
                 Image img = icon.getImage().getScaledInstance(100, 30, Image.SCALE_SMOOTH);
                 btnConfirm.setIcon(new ImageIcon(img));
-                UIUtils.applyButtonEffects(btnConfirm);
+                UIUtils.applyButtonEffects(btnConfirm); //공용 버튼 효과 적용
             } else {
                 btnConfirm.setText("로비로 이동");
             }
@@ -130,9 +141,10 @@ public class ResultUI extends JFrame {
             btnConfirm.setText("로비로 이동");
         }
 
-        // ★★★ [수정] 로비로 이동 시 기존 연결 사용 ★★★
+        //'로비로 이동' 버튼 클릭 이벤트
         btnConfirm.addActionListener(e -> {
             try {
+                //서버에 방을 나간다는 프로토콜 전송
                 if (dos != null) {
                     dos.writeUTF("/leaveRoom");
                 }
@@ -140,19 +152,21 @@ public class ResultUI extends JFrame {
                 ex.printStackTrace();
             }
             SwingUtilities.invokeLater(() -> {
-                // RoomListUI의 새 생성자 호출
+                //기존 연결을 유지한 채 로비 UI로 전환
                 new RoomListUI(userName, serverIp, serverPort, socket, dis, dos).setVisible(true);
-                dispose();
+                dispose(); //현재 결과 창 닫기
             });
         });
 
         bottomPanel.add(btnConfirm);
         contentPane.add(bottomPanel, BorderLayout.SOUTH);
 
+        //창 종료 시 처리
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent e) {
                 try {
+                    //서버에 방 나가기 신호를 보내고 모든 연결 종료
                     if (dos != null) {
                         dos.writeUTF("/leaveRoom");
                         dos.close();
@@ -162,7 +176,7 @@ public class ResultUI extends JFrame {
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
-                System.exit(0);
+                System.exit(0); //프로그램 완전 종료
             }
         });
 

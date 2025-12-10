@@ -138,7 +138,7 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                 e.printStackTrace();
             }
         } else {
-             System.err.println("이모티콘 디렉토리를 찾을 수 없습니다: " + path);
+            System.err.println("이모티콘 디렉토리를 찾을 수 없습니다: " + path);
         }
     }
 
@@ -692,7 +692,7 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                     }
 
                     // [실행 흐름 4-3] 게임 시작 메시지 처리 (역할 배정)
-                    if (msg.startsWith("/gameStart ")) {
+                    else if (msg.startsWith("/gameStart ")) {
                         String[] parts = msg.substring(11).split("\\|");
                         if (parts.length >= 2) {
                             String role = parts[0];
@@ -859,6 +859,21 @@ public class JavaChatClientView extends JFrame implements DrawingPanel.DrawingCa
                     // [실행 흐름 4-5] 게임 종료 메시지 처리 (투표 화면으로 전환)
                     else if (msg.startsWith("/gameEnded")) {
                         System.out.println("[Client] 게임 종료 수신 - 투표 화면으로 전환");
+
+                        //서버로부터 받은 최신 플레이어 리스트로 업데이트
+                        String[] parts = msg.split(" ", 2);
+                        if (parts.length > 1) {
+                            String[] playerArray = parts[1].split(",");
+                            List<String> updatedPlayers = new ArrayList<>();
+                            for (String p : playerArray) {
+                                if (!p.trim().isEmpty()) {
+                                    updatedPlayers.add(p.trim());
+                                }
+                            }
+                            currentRoom.updatePlayers(updatedPlayers);
+                            System.out.println("[Client] 플레이어 리스트 업데이트: " + updatedPlayers);
+                        }
+
                         isRunning = false;
 
                         SwingUtilities.invokeLater(() -> {

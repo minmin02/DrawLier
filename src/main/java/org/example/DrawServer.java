@@ -476,7 +476,9 @@ public class DrawServer extends JFrame {
                                     public void onGameEnded() {
                                         AppendText("[게임 종료] 방: " + currentRoomId + " -> 투표 진입 (목록에서 숨김)");
                                         setRoomStatus(currentRoomId, "FINISH");
-                                        WriteToRoom(currentRoomId, "/gameEnded");
+                                        //게임 종료 시 최신 플레이어 리스트를 함께 전송하여 클라이언트 간 동기화
+                                        String playerList = String.join(",", groom.getPlayers());
+                                        WriteToRoom(currentRoomId, "/gameEnded " + playerList);
                                     }
                                     @Override
                                     public void onTimerTick(int remainingSeconds) {

@@ -4,6 +4,10 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 
+/**
+ * 그림 그리기 기능을 제공하는 패널 클래스
+ * 마우스 드래그로 그림을 그리고, 서버로 그림 데이터를 전송
+ */
 public class DrawingPanel extends JPanel {
     private Image screenImage;
     private Graphics2D screenGraphic;
@@ -28,6 +32,10 @@ public class DrawingPanel extends JPanel {
         addMouseMotionListener(mm);
     }
 
+    /**
+     * 그리기 활성화/비활성화 설정
+     * 비활성화 시 커서를 기본 커서로 변경하여 그리기 불가능함을 표시
+     */
     @Override
     public void setEnabled(boolean enabled) {
         this.isEnabled = enabled;
@@ -43,6 +51,10 @@ public class DrawingPanel extends JPanel {
         }
     }
 
+    /**
+     * 이미지 버퍼를 확인하고 초기화
+     * 버퍼가 없으면 새로 생성하고 흰색 배경으로 채움
+     */
     public void checkImageBuffer() {
         if (screenImage == null) {
             screenImage = createImage(getWidth(), getHeight());
@@ -53,6 +65,11 @@ public class DrawingPanel extends JPanel {
         }
     }
 
+    /**
+     * 서버로부터 받은 그림 명령어를 파싱하여 화면에 그리기
+     * 명령어 형식: "/draw x1 y1 x2 y2 r g b width"
+     * @param command 그림 명령어 문자열
+     */
     public void processDrawCommand(String command) {
         checkImageBuffer();
         try {
@@ -75,6 +92,9 @@ public class DrawingPanel extends JPanel {
         }
     }
 
+    /**
+     * 캔버스를 흰색으로 초기화 (전체 지우기)
+     */
     public void clear() {
         checkImageBuffer();
         screenGraphic.setColor(Color.WHITE);
@@ -82,7 +102,14 @@ public class DrawingPanel extends JPanel {
         repaint();
     }
 
+    /**
+     * 마우스 이벤트를 처리하는 내부 클래스
+     * 드래그 시작 위치를 기록하고 드래그 중 선을 그림
+     */
     class MyMouseListener extends MouseAdapter {
+        /**
+         * 마우스 클릭 시 시작 좌표를 저장
+         */
         @Override
         public void mousePressed(MouseEvent e) {
             if (!isEnabled) {
@@ -94,6 +121,9 @@ public class DrawingPanel extends JPanel {
             prevY = e.getY();
         }
 
+        /**
+         * 마우스 드래그 시 이전 좌표부터 현재 좌표까지 선을 그리고 서버로 전송
+         */
         @Override
         public void mouseDragged(MouseEvent e) {
             if (!isEnabled || callback == null) {

@@ -8,6 +8,10 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 
+/**
+ * 채팅 기능을 제공하는 패널 클래스
+ * 메시지 입력, 이모지 전송, 채팅 메시지 표시 기능을 담당
+ */
 public class ChatPanel extends JPanel {
     private JTextField txtInput;
     private JPanel chatContainer;
@@ -37,6 +41,10 @@ public class ChatPanel extends JPanel {
         initializeUI();
     }
 
+    /**
+     * 채팅 패널의 UI 컴포넌트를 초기화하는 메서드
+     * 채팅 컨테이너, 입력 필드, 이모지/전송 버튼을 생성
+     */
     private void initializeUI() {
         setLayout(new BorderLayout(5, 5));
         setBorder(BorderFactory.createTitledBorder("채팅"));
@@ -104,10 +112,16 @@ public class ChatPanel extends JPanel {
         return btnSend;
     }
 
+
     private String getCurrentTime() {
         return new SimpleDateFormat("HH:mm").format(new Date());
     }
 
+    /**
+     * 시스템 메시지를 채팅창 중앙에 표시
+     * 입장/퇴장 메시지 등 시스템 알림에 사용
+     * @param message 표시할 시스템 메시지
+     */
     public void appendSystemMessage(String message) {
         SwingUtilities.invokeLater(() -> {
             JPanel messagePanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -129,6 +143,12 @@ public class ChatPanel extends JPanel {
         });
     }
 
+    /**
+     * 채팅 메시지를 말풍선 형태로 채팅창에 추가
+     * 본인 메시지는 오른쪽, 다른 사람 메시지는 왼쪽에 표시
+     * 이모지 메시지와 일반 텍스트 메시지를 구분하여 처리
+     * @param fullMessage "사용자명: 메시지" 형식의 전체 메시지
+     */
     public void appendChatMessage(String fullMessage) {
         SwingUtilities.invokeLater(() -> {
             if (fullMessage.startsWith("[입장]") || fullMessage.startsWith("[퇴장]") ||
@@ -234,6 +254,10 @@ public class ChatPanel extends JPanel {
         });
     }
 
+    /**
+     * 채팅창 스크롤을 최하단으로 이동
+     * 새 메시지가 추가될 때 자동으로 스크롤
+     */
     private void scrollToBottom() {
         SwingUtilities.invokeLater(() -> {
             JScrollBar vertical = chatScrollPane.getVerticalScrollBar();
@@ -241,6 +265,10 @@ public class ChatPanel extends JPanel {
         });
     }
 
+    /**
+     * 입력된 메시지를 전송하는 메서드
+     * 게임 중이고 턴이 아닌 경우 전송을 차단
+     */
     private void sendMessage() {
         String msg = txtInput.getText().trim();
         if (msg.isEmpty()) return;
@@ -257,6 +285,10 @@ public class ChatPanel extends JPanel {
         txtInput.setText("");
     }
 
+    /**
+     * 이모지 선택 다이얼로그를 표시
+     * 사용 가능한 이모지 목록을 그리드 형태로 보여줌
+     */
     private void showEmojiPicker() {
         JDialog emojiDialog = new JDialog(parentFrame, "이모티콘 선택", true);
         emojiDialog.setSize(450, 350);
